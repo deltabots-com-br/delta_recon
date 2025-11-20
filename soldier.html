@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DELTA RECON: FIELD OPS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Core Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+    <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Share Tech Mono', monospace;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            touch-action: none;
+            user-select: none;
+        }
+
+        #video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -1;
+            opacity: 0;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            z-index: 1;
+        }
+
+        .scanlines {
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 50%, rgba(0, 0, 0, 0.2) 50%);
+            background-size: 100% 4px;
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .vignette {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle, rgba(0, 10, 0, 0.1) 40%, rgba(0, 10, 0, 0.95) 100%);
+            pointer-events: none;
+            z-index: 11;
+        }
+
+        #ui-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 10px;
+        }
+
+        /* PIP */
+        #hq-pip-container {
+            display: none;
+            position: absolute;
+            top: 60px;
+            right: 10px;
+            width: 120px;
+            height: 90px;
+            border: 1px solid #0f0;
+            background: #000;
+            z-index: 50;
+            pointer-events: auto;
+        }
+
+        #hq-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: sepia(1) hue-rotate(70deg) contrast(1.2);
+        }
+
+        .hq-label {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: #0f0;
+            color: #000;
+            font-size: 8px;
+            font-weight: bold;
+            padding: 1px 3px;
+        }
+
+        /* Alerts */
+        .threat-lethal {
+            color: #ff0000;
+            text-shadow: 0 0 5px red;
+            animation: blink-fast 0.5s infinite;
+            border-color: red !important;
+        }
+
+        .threat-contact {
+            color: orange;
+            text-shadow: 0 0 5px orange;
+            border-color: orange !important;
+        }
+
+        .threat-surrender {
+            color: #00ccff;
+            text-shadow: 0 0 5px #00ccff;
+            animation: pulse 2s infinite;
+            border-color: #00ccff !important;
+        }
+
+        @keyframes blink-fast {
+
+            0%,
+            100% {
+                opacity: 1;
+                background-color: rgba(255, 0, 0, 0.2);
+            }
+
+            50% {
+                opacity: 0.5;
+                background-color: rgba(255, 0, 0, 0.5);
+            }
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 0.8;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0.8;
+            }
+        }
+
+        @keyframes scan-sweep {
+            0% {
+                background: rgba(0, 255, 0, 0.1);
+            }
+
+            50% {
+                background: rgba(0, 255, 0, 0.3);
+            }
+
+            100% {
+                background: rgba(0, 255, 0, 0.1);
+            }
+        }
+
+        #ocr-result {
+            display: none;
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 20, 0, 0.9);
+            border: 1px solid #0f0;
+            padding: 10px;
+            text-align: center;
+            width: 80%;
+            color: #fff;
+            z-index: 30;
+            pointer-events: none;
+        }
+
+        .ocr-scanning {
+            border: 1px dashed #0f0;
+            animation: scan-sweep 1s infinite;
+        }
+
+        .controls {
+            pointer-events: auto;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            width: 100%;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            background: #000;
+            border: 1px solid #0f0;
+            margin-top: -5px;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 2px;
+            background: #0f0;
+        }
+
+        .audio-incoming {
+            display: none;
+            color: #0ff;
+            animation: pulse 0.5s infinite;
+            font-weight: bold;
+            background: rgba(0, 255, 255, 0.2);
+            padding: 2px 5px;
+            border: 1px solid #0ff;
+            margin-top: 5px;
+            font-size: 10px;
+        }
+
+        #error-msg {
+            color: red;
+            font-size: 10px;
+            margin-top: 5px;
+            display: none;
+            border: 1px solid red;
+            padding: 2px;
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        /* Log */
+        .log-item {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            font-size: 9px;
+            color: #555;
+        }
+
+        .log-ok {
+            color: #0f0;
+        }
+
+        .log-fail {
+            color: #f00;
+        }
+
+        .log-wait {
+            color: #fbbf24;
+            animation: blink 1s infinite;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- BOOT SCREEN -->
+    <div id="loading" class="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center p-4">
+        <img src="deltabots.png"
+            class="h-16 mb-4 filter grayscale brightness-200 sepia hue-rotate-90 saturate-200 opacity-90"
+            onerror="this.style.display='none'">
+        <div class="text-4xl font-bold text-green-500 font-mono tracking-widest animate-pulse mb-2">DELTA RECON</div>
+        <div class="text-xs text-green-700 mb-6 tracking-[0.3em]">SYSTEM BOOT SEQUENCE</div>
+        <div class="bg-green-900/10 border border-green-900 p-4 w-64 font-mono mb-4 text-left">
+            <div id="log-tf" class="log-item"><span>NEURAL CORE</span> <span class="log-wait">INIT...</span></div>
+            <div id="log-obj" class="log-item"><span>OBJ DETECTION</span> <span class="log-wait">WAIT</span></div>
+            <div id="log-pose" class="log-item"><span>POSE EST</span> <span class="log-wait">WAIT</span></div>
+            <div id="log-ocr" class="log-item"><span>OCR ENGINE</span> <span class="log-wait">WAIT</span></div>
+            <div id="log-gps" class="log-item"><span>GEO SENSORS</span> <span class="log-wait">WAIT</span></div>
+        </div>
+        <button id="start-btn" disabled
+            class="px-8 py-3 bg-green-900/20 border-2 border-green-900 text-green-700 font-bold tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto hover:bg-green-500 hover:text-black hover:border-green-500"
+            onclick="engageSystems()">[ LOADING... ]</button>
+        <div id="error-msg"></div>
+        <div class="text-[8px] text-red-900 mt-4 cursor-pointer underline" onclick="forceStart()">FORCE OVERRIDE START
+        </div>
+    </div>
+
+    <!-- MEDIA -->
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="outputCanvas"></canvas>
+    <audio id="remote-audio" autoplay></audio>
+
+    <!-- LAYERS -->
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+    <div id="ocr-result">
+        <div class="text-[9px] text-green-400 tracking-widest mb-1">INTEL ACQUIRED</div><span id="ocr-text"
+            class="font-bold text-lg font-mono tracking-wider">---</span>
+    </div>
+
+    <!-- HUD -->
+    <div id="ui-layer">
+        <div class="w-full flex justify-between items-start border-b border-green-900/50 pb-2">
+            <div>
+                <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div><span
+                        class="text-xs font-bold">LIVE FEED</span>
+                </div>
+                <div class="text-[9px] text-green-700">UNIT: <span id="hud-unit-id"
+                        class="text-white font-bold select-all">OFFLINE</span></div>
+            </div>
+            <div class="flex flex-col items-end">
+                <div id="uplink-status" class="text-[10px] text-green-800 font-bold">UPLINK: OFFLINE</div>
+                <div id="hq-voice-indicator" class="audio-incoming">🔊 HQ TRANSMITTING</div>
+                <div class="flex gap-2 text-[9px] mt-1 text-green-600 font-mono"><span id="gps-lat">--.---</span> <span
+                        id="gps-lon">--.---</span></div>
+            </div>
+        </div>
+
+        <!-- PIP -->
+        <div id="hq-pip-container">
+            <div class="hq-label">HQ FEED</div><video id="hq-video" autoplay playsinline></video>
+        </div>
+
+        <!-- Scan Area -->
+        <div id="scan-bracket"
+            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-60 transition-all duration-300">
+            <div class="w-64 h-48 border-2 border-green-500/30 rounded flex items-center justify-center relative">
+                <div class="w-1 h-1 bg-green-500 shadow-[0_0_5px_#0f0]"></div>
+                <div class="absolute top-0 w-2 h-4 bg-green-500 left-0"></div>
+                <div class="absolute top-0 w-2 h-4 bg-green-500 right-0"></div>
+                <div class="absolute bottom-0 w-2 h-4 bg-green-500 left-0"></div>
+                <div class="absolute bottom-0 w-2 h-4 bg-green-500 right-0"></div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="w-full flex flex-col gap-2">
+            <div id="threat-container"
+                class="w-full flex justify-center items-center overflow-hidden h-8 bg-black/60 backdrop-blur border-y border-green-900 transition-colors duration-300">
+                <div id="threat-level" class="text-xs font-bold text-green-500 tracking-[0.5em] uppercase">SECTOR CLEAR
+                </div>
+            </div>
+            <div class="controls bg-black/80 border border-green-900 p-2 backdrop-blur-sm rounded flex flex-col gap-2">
+                <div class="flex justify-between items-center gap-2">
+                    <div class="w-1/2"><button onclick="triggerOCR()" id="ocr-btn"
+                            class="w-full border border-green-500 bg-green-900/40 text-[10px] py-2 text-green-300 font-bold hover:bg-green-500 hover:text-black transition-all">SCAN
+                            INTEL</button></div>
+                    <div class="w-1/2"><button onclick="toggleMode()" id="mode-btn"
+                            class="w-full border border-green-500/50 bg-green-500/10 text-[10px] py-2 text-green-400 font-bold">MODE:
+                            NVG</button></div>
+                </div>
+                <div class="flex items-center gap-2"><span class="text-[8px] text-green-600 w-8">GAIN</span><input
+                        type="range" id="gain-slider" min="1" max="5" step="0.1" value="2" class="flex-1"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const config = { gain: 2.0, mode: 'nvg', aiReady: false };
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('outputCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const startBtn = document.getElementById('start-btn');
+        const errorMsg = document.getElementById('error-msg');
+        const hqPip = document.getElementById('hq-pip-container');
+        const hqVideo = document.getElementById('hq-video');
+
+        const humanPath = new Path2D("M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM6 14a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2v-4h-4v4H8a2 2 0 0 1-2-2v-6z");
+        const knifePath = new Path2D("M19.4 3.6c-.8-.8-2-.8-2.8 0l-8 8-4 4c-.4.4-.4 1 0 1.4l2.8 2.8c.4.4 1 .4 1.4 0l4-4 8-8c.8-.8.8-2 0-2.8zM5.1 18.9l-1.4 1.4c-.4.4-1 .4-1.4 0-.4-.4-.4-1 0-1.4l1.4-1.4c.2-.2.5-.2.7 0l.7.7c.2.2.2.5 0 .7z");
+
+        let objectDetector, poseDetector, ocrWorker;
+
+        // --- GLOBAL STATE ---
+        let currentGPS = { lat: 0, lon: 0 };
+        let currentThreatStatus = "CLEAR";
+        let currentBattery = "100%";
+
+        function setLog(id, status, type) {
+            const el = document.querySelector(`#${id} span:last-child`);
+            el.className = type === 'ok' ? "log-ok" : (type === 'fail' ? "log-fail" : "log-wait");
+            el.innerText = status;
+        }
+
+        function showError(msg) {
+            errorMsg.style.display = 'block';
+            errorMsg.innerHTML = `<strong>ERROR:</strong> ${msg}`;
+        }
+
+        async function bootSequence() {
+            try { await tf.ready(); setLog('log-tf', 'OK', 'ok'); } catch (e) { setLog('log-tf', 'FAIL', 'fail'); }
+            try { objectDetector = await cocoSsd.load({ base: 'lite_mobilenet_v2' }); setLog('log-obj', 'OK', 'ok'); } catch (e) { setLog('log-obj', 'SKIP', 'wait'); }
+            try { poseDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }); setLog('log-pose', 'OK', 'ok'); } catch (e) { setLog('log-pose', 'SKIP', 'wait'); }
+            try { ocrWorker = Tesseract.createWorker(); await ocrWorker.load(); await ocrWorker.loadLanguage('eng'); await ocrWorker.initialize('eng'); setLog('log-ocr', 'OK', 'ok'); } catch (e) { setLog('log-ocr', 'SKIP', 'wait'); }
+
+            initBattery();
+            setLog('log-gps', 'READY', 'ok');
+            enableStart();
+        }
+
+        function enableStart() {
+            startBtn.disabled = false;
+            startBtn.classList.remove('bg-green-900/20', 'border-green-900', 'text-green-700');
+            startBtn.classList.add('bg-green-900/50', 'border-green-500', 'text-green-500');
+            startBtn.innerText = "[ ENGAGE SENSORS ]";
+        }
+
+        function forceStart() { enableStart(); engageSystems(); }
+
+        // --- BATTERY API ---
+        async function initBattery() {
+            try {
+                const bat = await navigator.getBattery();
+                const updateBat = () => { currentBattery = Math.round(bat.level * 100) + '%' + (bat.charging ? ' (CHG)' : ''); };
+                updateBat();
+                bat.addEventListener('levelchange', updateBat);
+                bat.addEventListener('chargingchange', updateBat);
+            } catch (e) {
+                // Fallback simulation
+                setInterval(() => {
+                    let lvl = parseInt(currentBattery) || 100;
+                    if (Math.random() > 0.9 && lvl > 0) lvl--;
+                    currentBattery = lvl + '%';
+                }, 60000);
+            }
+        }
+
+        let peer = null, dataConn = null, localStream = null;
+        const myPeerId = "OP-" + Math.floor(Math.random() * 900 + 100);
+
+        function initNetworkID() {
+            setLog('log-net', 'ID...', 'wait');
+            document.getElementById('hud-unit-id').innerText = myPeerId;
+            peer = new Peer(myPeerId);
+
+            peer.on('open', () => {
+                // Start telemetry loop immediately upon network ready
+                startTelemetryLoop();
+            });
+
+            peer.on('call', (call) => {
+                // CRITICAL: Answer with localStream immediately
+                if (localStream) {
+                    call.answer(localStream);
+                    console.log("📞 Incoming call answered with local stream");
+                } else {
+                    console.error("❌ Stream not ready to answer call");
+                }
+
+                updateUplinkStatus(true);
+
+                call.on('stream', (remoteStream) => {
+                    console.log("📡 Received remote stream from HQ");
+                    console.log("  Audio tracks:", remoteStream.getAudioTracks().length);
+                    console.log("  Video tracks:", remoteStream.getVideoTracks().length);
+
+                    // Set up audio element
+                    const audioEl = document.getElementById('remote-audio');
+                    audioEl.srcObject = remoteStream;
+                    audioEl.play().catch(e => console.log("Audio autoplay prevented:", e));
+
+                    // Set up video PIP
+                    hqVideo.srcObject = remoteStream;
+                    hqVideo.play().catch(e => console.log("Video autoplay prevented:", e));
+
+                    const vidTracks = remoteStream.getVideoTracks();
+                    if (vidTracks.length > 0) {
+                        console.log("📹 HQ video track found:", vidTracks[0].label);
+                        if (vidTracks[0].enabled) {
+                            hqPip.style.display = 'block';
+                            console.log("  ✅ PIP visible");
+                        }
+                        vidTracks[0].onmute = () => {
+                            hqPip.style.display = 'none';
+                            console.log("  ❌ PIP hidden (muted)");
+                        };
+                        vidTracks[0].onunmute = () => {
+                            hqPip.style.display = 'block';
+                            console.log("  ✅ PIP visible (unmuted)");
+                        };
+                    } else {
+                        console.log("⚠️ No video tracks in remote stream");
+                    }
+                });
+            });
+
+            peer.on('connection', (conn) => {
+                dataConn = conn;
+                conn.on('open', () => {
+                    updateUplinkStatus(true);
+                    broadcastTelemetry(); // Send immediate packet
+                });
+                conn.on('close', () => updateUplinkStatus(false));
+                conn.on('data', (data) => {
+                    if (data.type === 'AUDIO_STATUS') document.getElementById('hq-voice-indicator').style.display = data.isTalking ? 'block' : 'none';
+                    if (data.type === 'CAM_STATUS') hqPip.style.display = data.isCamOn ? 'block' : 'none';
+                });
+            });
+        }
+
+        function updateUplinkStatus(connected) {
+            document.getElementById('uplink-status').innerHTML = connected ? "UPLINK: <span style='color:#0f0'>SECURE</span>" : "UPLINK: <span style='color:red'>STANDBY</span>";
+        }
+
+        async function getCameraStream() {
+            try { return await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: true }); } catch (e) { }
+            try { return await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); } catch (e) { }
+            try { return await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); } catch (e) { }
+            return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+
+        async function engageSystems() {
+            startBtn.innerText = "ACCESSING CAM...";
+            errorMsg.style.display = "none";
+            try {
+                const stream = await getCameraStream();
+                if (!stream) throw new Error("No video stream available");
+                video.srcObject = stream;
+                await video.play();
+                document.getElementById('loading').style.display = 'none';
+
+                resizeCanvas();
+                const canvasStream = canvas.captureStream(30);
+                localStream = new MediaStream();
+                canvasStream.getVideoTracks().forEach(t => localStream.addTrack(t));
+                stream.getAudioTracks().forEach(t => localStream.addTrack(t));
+
+                // Initialize Network AFTER media is ready to ensure stream availability
+                initNetworkID();
+
+                initGPS();
+                requestAnimationFrame(renderLoop);
+                if (objectDetector) aiLoop();
+            } catch (e) {
+                showError(e.message + ". Check permissions.");
+                startBtn.innerText = "RETRY";
+            }
+        }
+
+        function startTelemetryLoop() {
+            setInterval(() => {
+                if (dataConn && dataConn.open) broadcastTelemetry();
+            }, 1000);
+        }
+
+        function broadcastTelemetry() {
+            const payload = {
+                gps: currentGPS,
+                threat: currentThreatStatus, // Sends current threat state every second
+                visionMode: config.mode.toUpperCase(),
+                battery: currentBattery
+            };
+            if (dataConn && dataConn.open) dataConn.send({ type: 'TELEMETRY', payload: payload });
+        }
+
+        async function aiLoop() {
+            if (video.paused || !objectDetector) { setTimeout(aiLoop, 500); return; }
+            try {
+                const detectedObjects = await objectDetector.detect(video);
+                let detectedPoses = [];
+                if (poseDetector) detectedPoses = await poseDetector.estimatePoses(video);
+                evaluateThreat(detectedObjects, detectedPoses);
+                window.lastPredictions = detectedObjects;
+                window.lastPoses = detectedPoses;
+            } catch (e) { }
+            setTimeout(aiLoop, 150);
+        }
+
+        function evaluateThreat(objects, poses) {
+            let status = "SECTOR CLEAR";
+            let className = "text-green-500";
+            let containerClass = "bg-black/60 border-green-900";
+            const WEAPONS = ['knife', 'scissors', 'baseball bat'];
+            const hasWeapon = objects.some(o => WEAPONS.includes(o.class));
+            const hasHuman = objects.some(o => o.class === 'person');
+            let isSurrender = false;
+
+            if (hasHuman && poses.length > 0) {
+                const p = poses[0];
+                const nose = p.keypoints.find(k => k.name === 'nose');
+                const lW = p.keypoints.find(k => k.name === 'left_wrist');
+                const rW = p.keypoints.find(k => k.name === 'right_wrist');
+                if (nose && lW && rW && lW.score > 0.3 && rW.score > 0.3 && lW.y < nose.y && rW.y < nose.y) isSurrender = true;
+            }
+
+            if (hasWeapon) { status = "⚠ LETHAL THREAT ⚠"; className = "text-red-500 threat-lethal"; containerClass = "bg-red-900/30 border-red-500"; }
+            else if (isSurrender) { status = "SURRENDER CONFIRMED"; className = "text-cyan-400 threat-surrender"; containerClass = "bg-cyan-900/30 border-cyan-500"; }
+            else if (hasHuman) { status = "CONTACT"; className = "text-orange-500 threat-contact"; containerClass = "bg-yellow-900/30 border-orange-500"; }
+
+            document.getElementById('threat-level').innerText = status;
+            document.getElementById('threat-level').className = "text-xs font-bold tracking-[0.5em] uppercase " + className;
+            document.getElementById('threat-container').className = "w-full flex justify-center items-center overflow-hidden h-8 backdrop-blur border-y transition-all duration-200 " + containerClass;
+
+            // Update global state for heartbeat
+            currentThreatStatus = status;
+        }
+
+        function renderLoop() {
+            if (video.readyState >= 2) {
+                const w = canvas.width, h = canvas.height;
+                ctx.drawImage(video, 0, 0, w, h);
+                const d = ctx.getImageData(0, 0, w, h).data;
+                if (config.mode === 'nvg') {
+                    for (let i = 0; i < d.length; i += 4) {
+                        let l = (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) * config.gain;
+                        d[i] = 0; d[i + 1] = l > 255 ? 255 : l; d[i + 2] = 0;
+                    }
+                }
+                ctx.putImageData(new ImageData(d, w, h), 0, 0);
+                if (window.lastPredictions) {
+                    const sx = w / video.videoWidth, sy = h / video.videoHeight;
+                    ctx.lineWidth = 2; ctx.font = "10px monospace";
+                    window.lastPredictions.forEach(obj => {
+                        const isWeap = ['knife', 'scissors', 'baseball bat'].includes(obj.class);
+                        const color = isWeap ? '#f00' : (obj.class === 'person' ? 'orange' : '#0f0');
+                        const x = obj.bbox[0] * sx, y = obj.bbox[1] * sy, bw = obj.bbox[2] * sx, bh = obj.bbox[3] * sy;
+                        const L = 15;
+                        ctx.strokeStyle = color; ctx.fillStyle = color;
+                        ctx.beginPath(); ctx.moveTo(x, y + L); ctx.lineTo(x, y); ctx.lineTo(x + L, y); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(x + bw - L, y); ctx.lineTo(x + bw, y); ctx.lineTo(x + bw, y + L); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(x, y + bh - L); ctx.lineTo(x, y + bh); ctx.lineTo(x + L, y + bh); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(x + bw - L, y + bh); ctx.lineTo(x + bw, y + bh); ctx.lineTo(x + bw, y + bh - L); ctx.stroke();
+                        ctx.fillText(isWeap ? "WEAPON" : obj.class.toUpperCase(), x + 5, y - 5);
+                        if (obj.class === 'person') { ctx.save(); ctx.translate(x - 15, y); ctx.scale(0.8, 0.8); ctx.fill(humanPath); ctx.restore(); }
+                        if (isWeap) { ctx.save(); ctx.translate(x - 15, y); ctx.scale(0.8, 0.8); ctx.fill(knifePath); ctx.restore(); }
+                    });
+                }
+            }
+            requestAnimationFrame(renderLoop);
+        }
+
+        function initGPS() {
+            if (navigator.geolocation) navigator.geolocation.watchPosition(pos => {
+                currentGPS.lat = pos.coords.latitude;
+                currentGPS.lon = pos.coords.longitude;
+                document.getElementById('gps-lat').innerText = pos.coords.latitude.toFixed(5);
+                document.getElementById('gps-lon').innerText = pos.coords.longitude.toFixed(5);
+                // No need to send here, heartbeat handles it
+            });
+        }
+
+        async function triggerOCR() {
+            if (!ocrWorker) return;
+            document.getElementById('ocr-btn').innerText = "SCANNING...";
+            const tmp = document.createElement('canvas');
+            tmp.width = video.videoWidth / 2; tmp.height = video.videoHeight / 4;
+            tmp.getContext('2d').drawImage(video, video.videoWidth / 4, video.videoHeight / 2 - video.videoHeight / 8, video.videoWidth / 2, video.videoHeight / 4, 0, 0, tmp.width, tmp.height);
+            try {
+                const { data: { text } } = await ocrWorker.recognize(tmp);
+                const clean = text.replace(/\n/g, " ").trim().substring(0, 30);
+                if (clean.length > 2) {
+                    document.getElementById('ocr-text').innerText = clean;
+                    document.getElementById('ocr-result').style.display = 'block';
+                    setTimeout(() => document.getElementById('ocr-result').style.display = 'none', 5000);
+                    if (dataConn && dataConn.open) dataConn.send({ type: 'INTEL_DATA', payload: { text: clean } });
+                }
+            } catch (e) { }
+            document.getElementById('ocr-btn').innerText = "SCAN INTEL";
+        }
+
+        function toggleMode() {
+            const btn = document.getElementById('mode-btn');
+            if (config.mode === 'nvg') { config.mode = 'optical'; btn.innerText = "MODE: OPTICAL"; btn.classList.replace('text-green-400', 'text-white'); }
+            else { config.mode = 'nvg'; btn.innerText = "MODE: NVG"; btn.classList.replace('text-white', 'text-green-400'); }
+        }
+
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        window.addEventListener('resize', resizeCanvas);
+        document.getElementById('gain-slider').addEventListener('input', e => config.gain = parseFloat(e.target.value));
+
+        window.onload = bootSequence;
+    </script>
+</body>
+
+</html>

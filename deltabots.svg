@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Background -->
+  <rect width="200" height="200" fill="#000000"/>
+  
+  <!-- Delta Symbol -->
+  <path d="M 100 40 L 160 140 L 40 140 Z" fill="none" stroke="#00ff00" stroke-width="3"/>
+  
+  <!-- Inner Delta -->
+  <path d="M 100 60 L 140 120 L 60 120 Z" fill="none" stroke="#00ff00" stroke-width="2" opacity="0.5"/>
+  
+  <!-- Crosshair Center -->
+  <circle cx="100" cy="100" r="8" fill="none" stroke="#00ff00" stroke-width="2"/>
+  <line x1="100" y1="92" x2="100" y2="84" stroke="#00ff00" stroke-width="2"/>
+  <line x1="100" y1="108" x2="100" y2="116" stroke="#00ff00" stroke-width="2"/>
+  <line x1="92" y1="100" x2="84" y2="100" stroke="#00ff00" stroke-width="2"/>
+  <line x1="108" y1="100" x2="116" y2="100" stroke="#00ff00" stroke-width="2"/>
+  
+  <!-- Corner Brackets -->
+  <path d="M 20 20 L 20 40 M 20 20 L 40 20" stroke="#00ff00" stroke-width="2" fill="none"/>
+  <path d="M 180 20 L 180 40 M 180 20 L 160 20" stroke="#00ff00" stroke-width="2" fill="none"/>
+  <path d="M 20 180 L 20 160 M 20 180 L 40 180" stroke="#00ff00" stroke-width="2" fill="none"/>
+  <path d="M 180 180 L 180 160 M 180 180 L 160 180" stroke="#00ff00" stroke-width="2" fill="none"/>
+  
+  <!-- Text -->
+  <text x="100" y="165" font-family="monospace" font-size="16" fill="#00ff00" text-anchor="middle" font-weight="bold">DELTA</text>
+  <text x="100" y="180" font-family="monospace" font-size="12" fill="#00ff00" text-anchor="middle" opacity="0.7">RECON</text>
+</svg>

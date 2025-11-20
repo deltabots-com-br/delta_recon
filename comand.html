@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>DELTA RECON: COMMAND OPS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap');
+
+        body {
+            background: #0d1117;
+            color: #e6edf3;
+            font-family: 'Rajdhani', sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+        }
+
+        .panel {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .panel-header {
+            background: #21262d;
+            padding: 5px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #8b949e;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .video-container {
+            flex: 1;
+            background: #000;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .leaflet-layer,
+        .leaflet-control-zoom-in,
+        .leaflet-control-zoom-out,
+        .leaflet-control-attribution {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+
+        .data-label {
+            color: #8b949e;
+            font-size: 10px;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .data-value {
+            font-size: 18px;
+            font-weight: 600;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        input[type="text"] {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: white;
+            padding: 4px 8px;
+            font-family: 'Roboto Mono';
+            font-size: 12px;
+            outline: none;
+            text-transform: uppercase;
+        }
+
+        button:active,
+        button.active {
+            background-color: #1f6feb;
+            color: white;
+            border-color: #1f6feb;
+        }
+
+        #ptt-btn:active,
+        #ptt-btn.active {
+            background-color: #238636 !important;
+            border-color: #2ea043 !important;
+        }
+
+        #cam-btn.active {
+            background-color: #1f6feb;
+            color: white;
+            border-color: #1f6feb;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+
+        .dot-green {
+            background: #238636;
+            box-shadow: 0 0 8px #238636;
+        }
+
+        .dot-red {
+            background: #da3633;
+            box-shadow: 0 0 8px #da3633;
+            animation: flashRed 1s infinite;
+        }
+
+        .dot-grey {
+            background: #484f58;
+        }
+
+        @keyframes flashRed {
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        #intel-feed {
+            flex: 1;
+            overflow-y: auto;
+            font-family: 'Roboto Mono';
+            font-size: 11px;
+            padding: 5px;
+        }
+
+        .intel-item {
+            border-left: 3px solid #1f6feb;
+            padding: 4px 8px;
+            margin-bottom: 6px;
+            background: rgba(31, 111, 235, 0.1);
+        }
+
+        .val-red {
+            color: #da3633;
+            animation: flashRed 0.5s infinite;
+        }
+
+        .val-blue {
+            color: #1f6feb;
+        }
+
+        .val-orange {
+            color: #d29922;
+        }
+    </style>
+</head>
+
+<body class="p-2 gap-2">
+
+    <div class="flex justify-between items-center h-12 px-2 border-b border-[#30363d] mb-2">
+        <div class="flex items-center gap-4">
+            <img src="deltabots.png" style="height: 32px; filter: grayscale(100%) brightness(1.5);"
+                onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNDg0ZjU4IiBzdHJva2Utd2lkdGg9IjIiPjxwYXRoIGQ9Ik0xMiA0TDIwIDIwSDRMMTIgNHpNMTIgMTB2NCIvPjwvc3ZnPg==';">
+            <div>
+                <h1 class="text-xl font-bold text-white tracking-widest leading-none">DELTA RECON</h1>
+                <div class="text-[10px] text-gray-500 tracking-[0.2em] font-mono">TACTICAL COMMAND OPERATIONS</div>
+            </div>
+        </div>
+        <div class="flex gap-2 items-center bg-[#161b22] p-1 rounded border border-[#30363d]">
+            <i class="material-icons text-gray-500 text-sm">link</i>
+            <input type="text" id="target-id" placeholder="ENTER UNIT ID" class="w-48">
+            <button onclick="initiateUplink()"
+                class="bg-[#238636] hover:bg-[#2ea043] text-white px-4 py-1 text-xs font-bold rounded border border-[#238636] uppercase">CONNECT
+                UPLINK</button>
+        </div>
+    </div>
+
+    <div class="flex-1 grid grid-cols-12 gap-2 h-[calc(100vh-80px)]">
+        <!-- Video -->
+        <div class="col-span-8 panel">
+            <div class="panel-header">
+                <div class="flex items-center gap-2"><i class="material-icons text-xs">videocam</i><span>LIVE OPTICAL
+                        FEED</span></div>
+                <div class="flex items-center gap-3 text-[10px] font-mono">
+                    <span id="vision-mode" class="text-[#1f6feb]">OPTICS: --</span>
+                    <div class="flex items-center"><span id="feed-indicator" class="status-dot dot-grey"></span><span
+                            id="feed-txt">NO SIGNAL</span></div>
+                </div>
+            </div>
+            <div class="video-container">
+                <video id="remote-video" autoplay playsinline controls class="z-10"></video>
+                <div id="overlay-msg"
+                    class="absolute text-gray-600 font-mono text-sm flex flex-col items-center justify-center z-0">
+                    <i class="material-icons text-4xl mb-2 opacity-50">signal_wifi_off</i><span>WAITING FOR
+                        UPLINK...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Intel & Comms -->
+        <div class="col-span-4 flex flex-col gap-2">
+            <div class="panel h-1/5 p-3">
+                <div class="grid grid-cols-2 gap-4 h-full">
+                    <div>
+                        <div class="data-label">UNIT ID</div>
+                        <div id="tel-id" class="data-value text-[#1f6feb]">---</div>
+                    </div>
+                    <div>
+                        <div class="data-label">BATTERY</div>
+                        <div id="tel-bat" class="data-value text-[#238636]">---</div>
+                    </div>
+                    <div>
+                        <div class="data-label">THREAT STATUS</div>
+                        <div id="tel-threat" class="data-value text-gray-500">---</div>
+                    </div>
+                    <div>
+                        <div class="data-label">GPS</div>
+                        <div id="tel-gps" class="data-value text-xs pt-2 text-gray-400">NO DATA</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel flex-1 relative">
+                <div id="map" class="w-full h-full z-0"></div>
+            </div>
+
+            <div class="panel h-1/5 flex flex-col">
+                <div class="panel-header"><span>INTEL FEED (OCR)</span><i
+                        class="material-icons text-xs text-gray-600">history</i></div>
+                <div id="intel-feed">
+                    <div class="text-gray-600 text-center mt-4 italic text-[10px]">Waiting for intel scan...</div>
+                </div>
+            </div>
+
+            <div class="panel h-1/6 flex flex-col">
+                <div class="panel-header"><span>SECURE COMMS CHANNEL</span><i
+                        class="material-icons text-xs text-green-500">lock</i></div>
+                <div class="flex-1 p-2 bg-[#0d1117] flex gap-2 items-center">
+                    <button id="ptt-btn"
+                        class="flex-1 h-full rounded font-bold flex flex-col items-center justify-center gap-1 border border-[#30363d] bg-[#21262d] text-gray-300"
+                        onmousedown="startTalking()" onmouseup="stopTalking()" ontouchstart="startTalking()"
+                        ontouchend="stopTalking()">
+                        <i class="material-icons">mic</i><span class="text-xs">PUSH TO TALK</span>
+                    </button>
+                    <button id="cam-btn"
+                        class="w-1/3 h-full rounded font-bold flex flex-col items-center justify-center gap-1 border border-[#30363d] bg-[#21262d] text-gray-500 text-[10px]"
+                        onclick="toggleVideo()">
+                        <i class="material-icons">videocam</i><span>TOGGLE<br>HQ CAM</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const map = L.map('map', { zoomControl: false }).setView([0, 0], 2);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        let unitMarker = null;
+
+        const peer = new Peer();
+        let dataConn = null;
+        let mediaCall = null;
+        let localStream = null;
+        let isMediaReady = false;
+
+        // Initialize media with proper constraints
+        async function initMedia() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    },
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                });
+
+                // Start with audio and video disabled
+                localStream.getAudioTracks().forEach(t => t.enabled = false);
+                localStream.getVideoTracks().forEach(t => t.enabled = false);
+                isMediaReady = true;
+                console.log("✅ Media initialized:", localStream.getTracks().map(t => `${t.kind}: ${t.label}`));
+            } catch (e) {
+                console.error("❌ Media access error:", e);
+                alert("ERRO: Permissão de câmera/microfone necessária para comunicação");
+            }
+        }
+
+        // Initialize media immediately on page load
+        initMedia();
+
+        function initiateUplink() {
+            const unitId = document.getElementById('target-id').value.trim().toUpperCase();
+            if (!unitId) return alert("ENTER ID");
+
+            if (!isMediaReady) {
+                alert("Aguarde inicialização de mídia...");
+                return;
+            }
+
+            document.getElementById('feed-txt').innerText = "CONNECTING...";
+
+            dataConn = peer.connect(unitId);
+            dataConn.on('open', () => {
+                document.getElementById('feed-txt').innerText = "DATA LINK OK";
+                document.getElementById('feed-indicator').className = "status-dot dot-green";
+                document.getElementById('overlay-msg').innerText = "REQUESTING VIDEO...";
+            });
+            dataConn.on('data', (data) => {
+                if (data.type === 'TELEMETRY') updateDashboard(data.payload);
+                if (data.type === 'STATUS_UPDATE') updateThreat(data.payload.status);
+                if (data.type === 'INTEL_DATA') addIntel(data.payload.text);
+            });
+
+            // Call with local stream (audio/video disabled by default)
+            mediaCall = peer.call(unitId, localStream);
+
+            mediaCall.on('stream', (remoteStream) => {
+                const videoEl = document.getElementById('remote-video');
+                videoEl.srcObject = remoteStream;
+                videoEl.play().then(() => {
+                    document.getElementById('overlay-msg').style.display = 'none';
+                    document.getElementById('feed-txt').innerText = "LIVE FEED ACTIVE";
+                    document.getElementById('feed-indicator').className = "status-dot dot-red animate-pulse";
+                });
+            });
+        }
+
+        function updateDashboard(data) {
+            document.getElementById('tel-id').innerText = document.getElementById('target-id').value;
+            if (data.battery) document.getElementById('tel-bat').innerText = data.battery;
+
+            if (data.threat) updateThreat(data.threat);
+            if (data.visionMode) document.getElementById('vision-mode').innerText = "OPTICS: " + data.visionMode;
+
+            if (data.gps && data.gps.lat) {
+                const lat = parseFloat(data.gps.lat);
+                const lon = parseFloat(data.gps.lon);
+                document.getElementById('tel-gps').innerText = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+                if (!unitMarker) {
+                    unitMarker = L.circleMarker([lat, lon], { color: '#1f6feb', fillColor: '#1f6feb', fillOpacity: 0.8, radius: 8 }).addTo(map);
+                    map.setView([lat, lon], 15);
+                } else { unitMarker.setLatLng([lat, lon]); }
+            }
+        }
+
+        function updateThreat(status) {
+            const el = document.getElementById('tel-threat');
+            el.innerText = status;
+            if (status.includes("LETHAL")) el.className = "data-value val-red";
+            else if (status.includes("SURRENDER")) el.className = "data-value val-blue";
+            else if (status.includes("CONTACT")) el.className = "data-value val-orange";
+            else el.className = "data-value text-gray-500";
+        }
+
+        function addIntel(text) {
+            const feed = document.getElementById('intel-feed');
+            const div = document.createElement('div');
+            div.className = "intel-item";
+            div.innerHTML = `<div>OCR: <span class="text-white">"${text}"</span></div>`;
+            feed.prepend(div);
+        }
+
+        function startTalking() {
+            if (!localStream || !isMediaReady) {
+                console.warn("⚠️ Stream not ready");
+                return;
+            }
+            console.log("🎤 PTT: Audio ON");
+            document.getElementById('ptt-btn').classList.add('active');
+            localStream.getAudioTracks().forEach(t => {
+                t.enabled = true;
+                console.log("  ✅ Audio track enabled:", t.label);
+            });
+            if (dataConn?.open) dataConn.send({ type: 'AUDIO_STATUS', isTalking: true });
+        }
+
+        function stopTalking() {
+            if (!localStream || !isMediaReady) return;
+            console.log("🎤 PTT: Audio OFF");
+            document.getElementById('ptt-btn').classList.remove('active');
+            localStream.getAudioTracks().forEach(t => {
+                t.enabled = false;
+                console.log("  ❌ Audio track disabled:", t.label);
+            });
+            if (dataConn?.open) dataConn.send({ type: 'AUDIO_STATUS', isTalking: false });
+        }
+
+        function toggleVideo() {
+            if (!localStream || !isMediaReady) return;
+            const btn = document.getElementById('cam-btn');
+            const track = localStream.getVideoTracks()[0];
+            if (!track) {
+                console.error("No video track available");
+                return;
+            }
+
+            if (track.enabled) {
+                track.enabled = false;
+                btn.classList.remove('active');
+                console.log("📹 HQ Camera: OFF");
+                if (dataConn?.open) dataConn.send({ type: 'CAM_STATUS', isCamOn: false });
+            } else {
+                track.enabled = true;
+                btn.classList.add('active');
+                console.log("📹 HQ Camera: ON");
+                if (dataConn?.open) dataConn.send({ type: 'CAM_STATUS', isCamOn: true });
+            }
+        }
+    </script>
+</body>
+
+</html>
