@@ -397,6 +397,29 @@
             errorMsg.innerHTML = `<strong>ERROR:</strong> ${msg}`;
         }
 
+        // --- BATTERY API ---
+        async function initBattery() {
+            try {
+                const bat = await navigator.getBattery();
+                const updateBat = () => { currentBattery = Math.round(bat.level * 100) + '%' + (bat.charging ? ' (CHG)' : ''); };
+                updateBat();
+                bat.addEventListener('levelchange', updateBat);
+                bat.addEventListener('chargingchange', updateBat);
+            } catch (e) {
+                setInterval(() => {
+                    let lvl = parseInt(currentBattery) || 100;
+                    if (Math.random() > 0.9 && lvl > 0) lvl--;
+                    currentBattery = lvl + '%';
+                }, 60000);
+            }
+        }
+
+        function startTelemetryLoop() {
+            setInterval(() => {
+                if (dataConn && dataConn.open) broadcastTelemetry();
+            }, 1000);
+        }
+
         async function bootSequence() {
             // Timeout de segurança para liberar o botão mesmo se a IA falhar
             setTimeout(() => {
@@ -420,95 +443,6 @@
             startBtn.disabled = false;
             startBtn.classList.remove('bg-green-900/20', 'border-green-900', 'text-green-700');
             startBtn.classList.add('bg-green-900/50', 'border-green-500', 'text-green-500');
-            startBtn.innerText = "[ ENGAGE SENSORS ]";
-        }
-
-        function forceStart() { enableStart(); engageSystems(); }
-
-        // --- BATTERY API ---
-        async function initBattery() {
-            try {
-                const bat = await navigator.getBattery();
-                const updateBat = () => { currentBattery = Math.round(bat.level * 100) + '%' + (bat.charging ? ' (CHG)' : ''); };
-                updateBat();
-                bat.addEventListener('levelchange', updateBat);
-                bat.addEventListener('chargingchange', updateBat);
-            } catch (e) {
-                setInterval(() => {
-                    let lvl = parseInt(currentBattery) || 100;
-                    if (Math.random() > 0.9 && lvl > 0) lvl--;
-                    currentBattery = lvl + '%';
-                }, 60000);
-            }
-        }
-
-        let peer = null, dataConn = null, localStream = null;
-        const myPeerId = "OP-" + Math.floor(Math.random() * 900 + 100);
-        window.myPeerId = myPeerId;
-
-        conn.on('open', () => {
-            updateUplinkStatus(true);
-            broadcastTelemetry();
-            if (window.deltaUI) deltaUI.showNotification('HQ CONNECTED', 'success');
-        });
-        conn.on('close', () => {
-            updateUplinkStatus(false);
-            if (window.deltaUI) deltaUI.showNotification('HQ DISCONNECTED', 'error');
-        });
-        async function getCameraStream() {
-            console.log('📹 Tentando acessar câmera...');
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' },
-                    audio: true
-                });
-                console.log('✅ Câmera traseira ativada');
-                return stream;
-            } catch (e) {
-                console.log('⚠️ Tentativa 1 falhou, tentando qualquer câmera...');
-                try {
-                    return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                } catch (err) {
-                    console.log('❌ Falha fatal na câmera:', err);
-                    return null;
-                }
-            }
-        }
-
-        async function engageSystems() {
-            startBtn.innerText = "ACCESSING CAM...";
-            errorMsg.style.display = "none";
-            try {
-                rawCameraStream = await getCameraStream();
-                if (!rawCameraStream) throw new Error("No video stream available");
-
-                video.srcObject = rawCameraStream;
-                await video.play();
-                console.log('▶️ Vídeo iniciado');
-
-                document.getElementById('loading').style.display = 'none';
-
-                resizeCanvas();
-                const canvasStream = canvas.captureStream(30);
-                localStream = new MediaStream();
-                canvasStream.getVideoTracks().forEach(t => localStream.addTrack(t));
-                rawCameraStream.getAudioTracks().forEach(t => localStream.addTrack(t));
-
-                initNetworkID();
-                initGPS();
-                requestAnimationFrame(renderLoop);
-                aiLoop();
-            } catch (e) {
-                console.error('❌ Erro ao ativar câmera:', e);
-                showError(e.message + ". Check permissions.");
-                startBtn.innerText = "RETRY";
-            }
-        }
-
-        function startTelemetryLoop() {
-            setInterval(() => {
-                if (dataConn && dataConn.open) broadcastTelemetry();
-            }, 1000);
         }
 
         function broadcastTelemetry() {
@@ -642,6 +576,130 @@
         function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
         window.addEventListener('resize', resizeCanvas);
         document.getElementById('gain-slider').addEventListener('input', e => config.gain = parseFloat(e.target.value));
+
+        let peer = null, dataConn = null, localStream = null;
+        const myPeerId = "OP-" + Math.floor(Math.random() * 900 + 100);
+        window.myPeerId = myPeerId;
+
+        const hudId = document.getElementById('hud-unit-id');
+        if (hudId) hudId.innerText = myPeerId;
+
+        function initNetworkID() {
+            console.log('🌐 Inicializando rede com ID:', myPeerId);
+            peer = new Peer(myPeerId);
+
+            peer.on('open', () => {
+                console.log('✅ Rede PeerJS conectada');
+                startTelemetryLoop();
+            });
+
+            peer.on('call', async (call) => {
+                console.log("📞 Recebendo chamada de video...");
+                if (window.deltaUI) deltaUI.showNotification("INCOMING CALL...", "warning");
+
+                let streamToUse = window.rawCameraStream;
+                let source = "GLOBAL";
+
+                if (!streamToUse || streamToUse.getVideoTracks().length === 0) {
+                    console.warn("⚠️ Stream global sem vídeo ou inexistente. Tentando nova captura...");
+                    try {
+                        streamToUse = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: true });
+                        source = "FRESH";
+                    } catch (e) {
+                        console.error("❌ Falha ao obter stream de fallback:", e);
+                        if (window.deltaUI) deltaUI.showNotification("CAMERA FAIL", "error");
+                        return;
+                    }
+                }
+
+                const answerStream = new MediaStream();
+                streamToUse.getTracks().forEach(track => answerStream.addTrack(track));
+
+                const vTracks = answerStream.getVideoTracks().length;
+                const aTracks = answerStream.getAudioTracks().length;
+                console.log(`✅ Respondendo chamada. Fonte: ${source}. Tracks - V:${vTracks} A:${aTracks}`);
+
+                if (window.deltaUI) deltaUI.showNotification(`ANSWERING (V:${vTracks} A:${aTracks})`, "success");
+
+                call.answer(answerStream);
+
+                call.on('stream', (remoteStream) => {
+                    const audio = document.createElement('audio');
+                    audio.srcObject = remoteStream;
+                    audio.play().catch(e => console.log("Autoplay audio prevented:", e));
+                    if (window.deltaUI) deltaUI.showNotification("HQ AUDIO CONNECTED", "info");
+                });
+            });
+
+            peer.on('connection', (conn) => {
+                dataConn = conn;
+                window.dataConn = conn;
+                conn.on('open', () => {
+                    updateUplinkStatus(true);
+                    broadcastTelemetry();
+                    if (window.deltaUI) deltaUI.showNotification('HQ CONNECTED', 'success');
+                });
+                conn.on('close', () => {
+                    updateUplinkStatus(false);
+                    if (window.deltaUI) deltaUI.showNotification('HQ DISCONNECTED', 'error');
+                });
+                conn.on('data', (data) => {
+                    if (data.type === 'AUDIO_STATUS') document.getElementById('hq-voice-indicator').style.display = data.isTalking ? 'block' : 'none';
+                    if (data.type === 'CAM_STATUS') hqPip.style.display = data.isCamOn ? 'block' : 'none';
+                    if (data.type === 'CHAT_MESSAGE' && window.deltaChat) deltaChat.receive(data.payload.sender, data.payload.text);
+                });
+            });
+        }
+
+        async function getCameraStream() {
+            console.log('📹 Tentando acessar câmera...');
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' },
+                    audio: true
+                });
+                console.log('✅ Câmera traseira ativada');
+                return stream;
+            } catch (e) {
+                console.log('⚠️ Tentativa 1 falhou, tentando qualquer câmera...');
+                try {
+                    return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                } catch (err) {
+                    console.log('❌ Falha fatal na câmera:', err);
+                    return null;
+                }
+            }
+        }
+
+        async function engageSystems() {
+            startBtn.innerText = "ACCESSING CAM...";
+            errorMsg.style.display = "none";
+            try {
+                rawCameraStream = await getCameraStream();
+                if (!rawCameraStream) throw new Error("No video stream available");
+
+                video.srcObject = rawCameraStream;
+                await video.play();
+                console.log('▶️ Vídeo iniciado');
+
+                document.getElementById('loading').style.display = 'none';
+
+                resizeCanvas();
+                const canvasStream = canvas.captureStream(30);
+                localStream = new MediaStream();
+                canvasStream.getVideoTracks().forEach(t => localStream.addTrack(t));
+                rawCameraStream.getAudioTracks().forEach(t => localStream.addTrack(t));
+
+                initNetworkID();
+                initGPS();
+                requestAnimationFrame(renderLoop);
+                aiLoop();
+            } catch (e) {
+                console.error('❌ Erro ao ativar câmera:', e);
+                showError(e.message + ". Check permissions.");
+                startBtn.innerText = "RETRY";
+            }
+        }
 
         window.onload = bootSequence;
     </script>
