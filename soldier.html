@@ -314,7 +314,7 @@
                         class="text-xs font-bold">LIVE FEED</span>
                 </div>
                 <div class="text-[9px] text-green-700">UNIT: <span id="hud-unit-id"
-                        class="text-white font-bold select-all">OFFLINE</span></div>
+                        class="text-white font-bold select-all">LOADING...</span></div>
             </div>
             <div class="flex flex-col items-end">
                 <div id="uplink-status" class="text-[10px] text-green-800 font-bold">UPLINK: OFFLINE</div>
@@ -435,18 +435,19 @@
         let peer = null, dataConn = null, localStream = null;
         const myPeerId = "OP-" + Math.floor(Math.random() * 900 + 100);
 
+        // ✅ CORREÇÃO 1: Mostrar UNIT ID imediatamente ao carregar a página
+        document.getElementById('hud-unit-id').innerText = myPeerId;
+
         function initNetworkID() {
-            setLog('log-net', 'ID...', 'wait');
-            document.getElementById('hud-unit-id').innerText = myPeerId;
+            console.log('🌐 Inicializando rede com ID:', myPeerId);
             peer = new Peer(myPeerId);
 
             peer.on('open', () => {
-                // Start telemetry loop immediately upon network ready
+                console.log('✅ Rede PeerJS conectada');
                 startTelemetryLoop();
             });
 
             peer.on('call', (call) => {
-                // CRITICAL: Answer with localStream immediately
                 if (localStream) {
                     call.answer(localStream);
                     console.log("📞 Incoming call answered with local stream");
@@ -461,12 +462,10 @@
                     console.log("  Audio tracks:", remoteStream.getAudioTracks().length);
                     console.log("  Video tracks:", remoteStream.getVideoTracks().length);
 
-                    // Set up audio element
                     const audioEl = document.getElementById('remote-audio');
                     audioEl.srcObject = remoteStream;
                     audioEl.play().catch(e => console.log("Audio autoplay prevented:", e));
 
-                    // Set up video PIP
                     hqVideo.srcObject = remoteStream;
                     hqVideo.play().catch(e => console.log("Video autoplay prevented:", e));
 
@@ -495,7 +494,7 @@
                 dataConn = conn;
                 conn.on('open', () => {
                     updateUplinkStatus(true);
-                    broadcastTelemetry(); // Send immediate packet
+                    broadcastTelemetry();
                 });
                 conn.on('close', () => updateUplinkStatus(false));
                 conn.on('data', (data) => {
@@ -509,11 +508,68 @@
             document.getElementById('uplink-status').innerHTML = connected ? "UPLINK: <span style='color:#0f0'>SECURE</span>" : "UPLINK: <span style='color:red'>STANDBY</span>";
         }
 
+        // ✅ CORREÇÃO 2: Melhorar detecção de câmera traseira para Android
         async function getCameraStream() {
-            try { return await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: true }); } catch (e) { }
-            try { return await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); } catch (e) { }
-            try { return await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); } catch (e) { }
-            return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            console.log('📹 Tentando acessar câmera...');
+
+            // Tentativa 1: Câmera traseira com áudio (ideal)
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: { exact: 'environment' },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: true
+                });
+                console.log('✅ Câmera traseira ativada (exact + audio)');
+                return stream;
+            } catch (e) {
+                console.log('⚠️ Tentativa 1 falhou:', e.message);
+            }
+
+            // Tentativa 2: Câmera traseira sem exact
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' },
+                    audio: true
+                });
+                console.log('✅ Câmera traseira ativada (environment + audio)');
+                return stream;
+            } catch (e) {
+                console.log('⚠️ Tentativa 2 falhou:', e.message);
+            }
+
+            // Tentativa 3: Qualquer câmera com áudio
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
+                console.log('✅ Câmera ativada (any + audio)');
+                return stream;
+            } catch (e) {
+                console.log('⚠️ Tentativa 3 falhou:', e.message);
+            }
+
+            // Tentativa 4: Câmera traseira sem áudio
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' },
+                    audio: false
+                });
+                console.log('✅ Câmera traseira ativada (sem audio)');
+                return stream;
+            } catch (e) {
+                console.log('⚠️ Tentativa 4 falhou:', e.message);
+            }
+
+            // Última tentativa: Qualquer câmera sem áudio
+            console.log('⚠️ Última tentativa: qualquer câmera sem áudio');
+            return await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: false
+            });
         }
 
         async function engageSystems() {
@@ -522,8 +578,21 @@
             try {
                 const stream = await getCameraStream();
                 if (!stream) throw new Error("No video stream available");
+
+                // Verificar qual câmera foi ativada
+                const videoTrack = stream.getVideoTracks()[0];
+                const settings = videoTrack.getSettings();
+                console.log('✅ Câmera ativada:', {
+                    label: videoTrack.label,
+                    facingMode: settings.facingMode || 'unknown',
+                    width: settings.width,
+                    height: settings.height
+                });
+
                 video.srcObject = stream;
                 await video.play();
+                console.log('▶️ Vídeo iniciado');
+
                 document.getElementById('loading').style.display = 'none';
 
                 resizeCanvas();
@@ -532,13 +601,17 @@
                 canvasStream.getVideoTracks().forEach(t => localStream.addTrack(t));
                 stream.getAudioTracks().forEach(t => localStream.addTrack(t));
 
-                // Initialize Network AFTER media is ready to ensure stream availability
-                initNetworkID();
+                console.log('🎙️ Tracks no localStream:', {
+                    video: localStream.getVideoTracks().length,
+                    audio: localStream.getAudioTracks().length
+                });
 
+                initNetworkID();
                 initGPS();
                 requestAnimationFrame(renderLoop);
                 if (objectDetector) aiLoop();
             } catch (e) {
+                console.error('❌ Erro ao ativar câmera:', e);
                 showError(e.message + ". Check permissions.");
                 startBtn.innerText = "RETRY";
             }
@@ -553,7 +626,7 @@
         function broadcastTelemetry() {
             const payload = {
                 gps: currentGPS,
-                threat: currentThreatStatus, // Sends current threat state every second
+                threat: currentThreatStatus,
                 visionMode: config.mode.toUpperCase(),
                 battery: currentBattery
             };
@@ -598,7 +671,6 @@
             document.getElementById('threat-level').className = "text-xs font-bold tracking-[0.5em] uppercase " + className;
             document.getElementById('threat-container').className = "w-full flex justify-center items-center overflow-hidden h-8 backdrop-blur border-y transition-all duration-200 " + containerClass;
 
-            // Update global state for heartbeat
             currentThreatStatus = status;
         }
 
@@ -642,7 +714,6 @@
                 currentGPS.lon = pos.coords.longitude;
                 document.getElementById('gps-lat').innerText = pos.coords.latitude.toFixed(5);
                 document.getElementById('gps-lon').innerText = pos.coords.longitude.toFixed(5);
-                // No need to send here, heartbeat handles it
             });
         }
 
