@@ -4,18 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DELTA RECON: FIELD OPS</title>
+    <title>DELTA SOLDIER OS v2.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- Core Libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
-    <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-
+    <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
@@ -24,377 +19,170 @@
             color: #0f0;
             font-family: 'Share Tech Mono', monospace;
             overflow: hidden;
-            width: 100vw;
-            height: 100vh;
             touch-action: none;
-            user-select: none;
         }
 
-        #video {
+        .scan-line {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
-            height: 100%;
-            object-fit: cover;
-            z-index: -1;
-            opacity: 0;
-        }
-
-        canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-            z-index: 1;
-        }
-
-        .scanlines {
-            background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 50%, rgba(0, 0, 0, 0.2) 50%);
-            background-size: 100% 4px;
-            position: absolute;
-            inset: 0;
+            height: 2px;
+            background: rgba(0, 255, 0, 0.3);
+            animation: scan 3s linear infinite;
             pointer-events: none;
             z-index: 10;
         }
 
-        .vignette {
-            position: absolute;
-            inset: 0;
-            background: radial-gradient(circle, rgba(0, 10, 0, 0.1) 40%, rgba(0, 10, 0, 0.95) 100%);
-            pointer-events: none;
-            z-index: 11;
-        }
-
-        #ui-layer {
-            position: absolute;
-            inset: 0;
-            z-index: 20;
-            pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 10px;
-        }
-
-        /* PIP */
-        #hq-pip-container {
-            display: none;
-            position: absolute;
-            top: 60px;
-            right: 10px;
-            width: 120px;
-            height: 90px;
-            border: 1px solid #0f0;
-            background: #000;
-            z-index: 50;
-            pointer-events: auto;
-        }
-
-        #hq-video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            filter: sepia(1) hue-rotate(70deg) contrast(1.2);
-        }
-
-        .hq-label {
-            position: absolute;
-            top: 0;
-            left: 0;
-            background: #0f0;
-            color: #000;
-            font-size: 8px;
-            font-weight: bold;
-            padding: 1px 3px;
-        }
-
-        /* Alerts */
-        .threat-lethal {
-            color: #ff0000;
-            text-shadow: 0 0 5px red;
-            animation: blink-fast 0.5s infinite;
-            border-color: red !important;
-        }
-
-        .threat-contact {
-            color: orange;
-            text-shadow: 0 0 5px orange;
-            border-color: orange !important;
-        }
-
-        .threat-surrender {
-            color: #00ccff;
-            text-shadow: 0 0 5px #00ccff;
-            animation: pulse 2s infinite;
-            border-color: #00ccff !important;
-        }
-
-        @keyframes blink-fast {
-
-            0%,
-            100% {
-                opacity: 1;
-                background-color: rgba(255, 0, 0, 0.2);
-            }
-
-            50% {
-                opacity: 0.5;
-                background-color: rgba(255, 0, 0, 0.5);
-            }
-        }
-
-        @keyframes pulse {
+        @keyframes scan {
             0% {
-                opacity: 0.8;
-            }
-
-            50% {
-                opacity: 1;
+                top: 0%;
             }
 
             100% {
-                opacity: 0.8;
+                top: 100%;
             }
         }
 
-        @keyframes scan-sweep {
-            0% {
-                background: rgba(0, 255, 0, 0.1);
-            }
-
-            50% {
-                background: rgba(0, 255, 0, 0.3);
-            }
-
-            100% {
-                background: rgba(0, 255, 0, 0.1);
-            }
+        .hud-panel {
+            background: rgba(0, 20, 0, 0.6);
+            border: 1px solid #004400;
+            backdrop-filter: blur(2px);
         }
 
-        #ocr-result {
-            display: none;
-            position: absolute;
-            top: 20%;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 20, 0, 0.9);
-            border: 1px solid #0f0;
-            padding: 10px;
-            text-align: center;
-            width: 80%;
-            color: #fff;
-            z-index: 30;
-            pointer-events: none;
-        }
-
-        .ocr-scanning {
-            border: 1px dashed #0f0;
-            animation: scan-sweep 1s infinite;
-        }
-
-        .controls {
-            pointer-events: auto;
-        }
-
-        input[type=range] {
-            -webkit-appearance: none;
-            appearance: none;
-            background: transparent;
-            width: 100%;
-        }
-
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            height: 12px;
-            width: 12px;
-            background: #000;
-            border: 1px solid #0f0;
-            margin-top: -5px;
-        }
-
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 2px;
-            background: #0f0;
-        }
-
-        .audio-incoming {
-            display: none;
-            color: #0ff;
-            animation: pulse 0.5s infinite;
-            font-weight: bold;
-            background: rgba(0, 255, 255, 0.2);
-            padding: 2px 5px;
-            border: 1px solid #0ff;
-            margin-top: 5px;
-            font-size: 10px;
-        }
-
-        #error-msg {
-            color: red;
-            font-size: 10px;
-            margin-top: 5px;
-            display: none;
-            border: 1px solid red;
-            padding: 2px;
-            background: rgba(0, 0, 0, 0.8);
-        }
-
-        /* Log */
-        .log-item {
-            display: flex;
-            justify-content: space-between;
-            width: 100%;
-            font-size: 9px;
-            color: #555;
-        }
-
-        .log-ok {
-            color: #0f0;
-        }
-
-        .log-fail {
-            color: #f00;
-        }
-
-        .log-wait {
-            color: #fbbf24;
+        .blinking {
             animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0;
+            }
+        }
+
+        #video {
+            transform: scaleX(1);
+            /* Espelhar se for selfie, mas traseira nao */
         }
     </style>
 </head>
 
-<body>
+<body class="h-screen w-screen flex flex-col relative">
 
-    <!-- BOOT SCREEN -->
-    <div id="loading" class="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center p-4">
-        <img src="deltabots.png"
-            class="h-16 mb-4 filter grayscale brightness-200 sepia hue-rotate-90 saturate-200 opacity-90"
-            onerror="this.style.display='none'">
-        <div class="text-4xl font-bold text-green-500 font-mono tracking-widest animate-pulse mb-2">DELTA RECON</div>
-        <div class="text-xs text-green-700 mb-6 tracking-[0.3em]">SYSTEM BOOT SEQUENCE</div>
-        <div class="bg-green-900/10 border border-green-900 p-4 w-64 font-mono mb-4 text-left">
-            <div id="log-tf" class="log-item"><span>NEURAL CORE</span> <span class="log-wait">INIT...</span></div>
-            <div id="log-obj" class="log-item"><span>OBJ DETECTION</span> <span class="log-wait">WAIT</span></div>
-            <div id="log-pose" class="log-item"><span>POSE EST</span> <span class="log-wait">WAIT</span></div>
-            <div id="log-ocr" class="log-item"><span>OCR ENGINE</span> <span class="log-wait">WAIT</span></div>
-            <div id="log-gps" class="log-item"><span>GEO SENSORS</span> <span class="log-wait">WAIT</span></div>
+    <!-- VIDEO LAYER -->
+    <video id="video" class="absolute top-0 left-0 w-full h-full object-cover z-0" autoplay playsinline muted></video>
+    <canvas id="outputCanvas" class="absolute top-0 left-0 w-full h-full z-10"></canvas>
+    <div class="scan-line"></div>
+
+    <!-- UI LAYER -->
+    <div id="ui-layer"
+        class="absolute top-0 left-0 w-full h-full z-20 flex flex-col justify-between p-2 pointer-events-none">
+
+        <!-- TOP HUD -->
+        <div class="flex justify-between items-start pointer-events-auto">
+            <div class="hud-panel p-2 text-xs">
+                <div class="text-green-500 font-bold">UNIT ID: <span id="hud-unit-id"
+                        class="text-white">INITIALIZING...</span></div>
+                <div class="text-green-700">OP: <span class="text-green-400">ACTIVE</span></div>
+                <div class="mt-1 text-[10px] text-gray-400">
+                    GPS: <span id="gps-lat">--.----</span>, <span id="gps-lon">--.----</span>
+                </div>
+            </div>
+            <div class="hud-panel p-2 text-xs text-right">
+                <div class="text-green-500 font-bold">SYS STATUS</div>
+                <div id="log-tf" class="text-gray-500">AI CORE: <span class="text-yellow-500">INIT</span></div>
+                <div id="log-obj" class="text-gray-500">VISUAL: <span class="text-yellow-500">WAIT</span></div>
+                <div id="log-pose" class="text-gray-500">POSE: <span class="text-yellow-500">WAIT</span></div>
+                <div id="log-ocr" class="text-gray-500">INTEL: <span class="text-yellow-500">WAIT</span></div>
+                <div id="log-gps" class="text-gray-500">GPS: <span class="text-yellow-500">WAIT</span></div>
+            </div>
         </div>
-        <button id="start-btn" disabled
-            class="px-8 py-3 bg-green-900/20 border-2 border-green-900 text-green-700 font-bold tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto hover:bg-green-500 hover:text-black hover:border-green-500"
-            onclick="engageSystems()">[ LOADING... ]</button>
-        <div id="error-msg"></div>
-        <div class="text-[8px] text-red-900 mt-4 cursor-pointer underline" onclick="forceStart()">FORCE OVERRIDE START
+
+        <!-- CENTER RETICLE (CSS) -->
+        <div
+            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 border border-green-900/50 rounded-full flex items-center justify-center pointer-events-none opacity-50">
+            <div class="w-1 h-1 bg-green-500 rounded-full"></div>
+            <div class="absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-4 bg-green-500"></div>
+            <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-0.5 h-4 bg-green-500"></div>
+            <div class="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-0.5 bg-green-500"></div>
+            <div class="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-0.5 bg-green-500"></div>
+        </div>
+
+        <!-- THREAT ALERT -->
+        <div id="threat-container" class="hidden">
+            <div id="threat-level" class="text-xs font-bold tracking-[0.5em] uppercase text-green-500">SECTOR CLEAR
+            </div>
+        </div>
+
+        <!-- BOTTOM CONTROLS -->
+        <div class="controls pointer-events-auto mb-4">
+            <div class="flex gap-2 mb-2">
+                <button id="mode-btn" onclick="toggleMode()"
+                    class="flex-1 border border-green-500 bg-green-900/40 text-xs py-3 text-white font-bold hover:bg-green-500 hover:text-black transition-all">MODE:
+                    OPTICAL</button>
+                <button id="ocr-btn" onclick="triggerOCR()"
+                    class="flex-1 border border-green-500 bg-green-900/40 text-xs py-3 text-white font-bold hover:bg-green-500 hover:text-black transition-all">SCAN
+                    INTEL</button>
+            </div>
+            <div class="flex gap-2">
+                <div class="flex-1 hud-panel p-1 flex items-center justify-center">
+                    <input type="range" id="gain-slider" min="1" max="5" step="0.1" value="1"
+                        class="w-full accent-green-500">
+                </div>
+            </div>
+
+            <!-- OCR RESULT POPUP -->
+            <div id="ocr-result"
+                class="hidden mt-2 p-2 bg-green-900/80 border border-green-400 text-white text-xs font-mono break-all">
+                <span class="text-green-300 font-bold">INTEL ACQUIRED:</span> <span id="ocr-text">...</span>
+            </div>
         </div>
     </div>
 
-    <!-- MEDIA -->
-    <video id="video" playsinline autoplay muted></video>
-    <canvas id="outputCanvas"></canvas>
-    <audio id="remote-audio" autoplay></audio>
-
-    <!-- LAYERS -->
-    <div class="scanlines"></div>
-    <div class="vignette"></div>
-    <div id="ocr-result">
-        <div class="text-[9px] text-green-400 tracking-widest mb-1">INTEL ACQUIRED</div><span id="ocr-text"
-            class="font-bold text-lg font-mono tracking-wider">---</span>
+    <!-- START OVERLAY -->
+    <div id="loading"
+        class="absolute top-0 left-0 w-full h-full bg-black z-50 flex flex-col items-center justify-center p-8">
+        <div class="text-green-500 font-bold text-2xl mb-4 tracking-widest">DELTA OS</div>
+        <div class="text-green-800 text-xs mb-8 font-mono">TACTICAL SYSTEMS INITIALIZATION</div>
+        <div id="boot-log" class="text-green-900 text-[10px] font-mono h-32 overflow-hidden mb-4 w-full text-center">
+        </div>
+        <button id="start-btn" onclick="engageSystems()" disabled
+            class="border border-green-900 bg-green-900/20 text-green-700 px-8 py-4 font-bold tracking-widest transition-all">INITIALIZING...</button>
+        <div id="error-msg" class="text-red-500 text-xs mt-4 hidden text-center"></div>
     </div>
 
-    <!-- HUD -->
-    <div id="ui-layer">
-        <div class="w-full flex justify-between items-start border-b border-green-900/50 pb-2">
-            <div>
-                <div class="flex items-center gap-2">
-                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div><span
-                        class="text-xs font-bold">LIVE FEED</span>
-                </div>
-                <div class="text-[9px] text-green-700">UNIT: <span id="hud-unit-id"
-                        class="text-white font-bold select-all">LOADING...</span></div>
-            </div>
-            <div class="flex flex-col items-end">
-                <div id="uplink-status" class="text-[10px] text-green-800 font-bold">UPLINK: OFFLINE</div>
-                <div id="hq-voice-indicator" class="audio-incoming">🔊 HQ TRANSMITTING</div>
-                <div class="flex gap-2 text-[9px] mt-1 text-green-600 font-mono"><span id="gps-lat">--.---</span> <span
-                        id="gps-lon">--.---</span></div>
-            </div>
-        </div>
-
-        <!-- PIP -->
-        <div id="hq-pip-container">
-            <div class="hq-label">HQ FEED</div><video id="hq-video" autoplay playsinline></video>
-        </div>
-
-        <!-- Scan Area -->
-        <div id="scan-bracket"
-            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-60 transition-all duration-300">
-            <div class="w-64 h-48 border-2 border-green-500/30 rounded flex items-center justify-center relative">
-                <div class="w-1 h-1 bg-green-500 shadow-[0_0_5px_#0f0]"></div>
-                <div class="absolute top-0 w-2 h-4 bg-green-500 left-0"></div>
-                <div class="absolute top-0 w-2 h-4 bg-green-500 right-0"></div>
-                <div class="absolute bottom-0 w-2 h-4 bg-green-500 left-0"></div>
-                <div class="absolute bottom-0 w-2 h-4 bg-green-500 right-0"></div>
-            </div>
-        </div>
-
-        <!-- Footer -->
-        <div class="w-full flex flex-col gap-2">
-            <div id="threat-container"
-                class="w-full flex justify-center items-center overflow-hidden h-8 bg-black/60 backdrop-blur border-y border-green-900 transition-colors duration-300">
-                <div id="threat-level" class="text-xs font-bold text-green-500 tracking-[0.5em] uppercase">SECTOR CLEAR
-                </div>
-            </div>
-            <div class="controls bg-black/80 border border-green-900 p-2 backdrop-blur-sm rounded flex flex-col gap-2">
-                <div class="flex justify-between items-center gap-2">
-                    <div class="w-1/2"><button onclick="triggerOCR()" id="ocr-btn"
-                            class="w-full border border-green-500 bg-green-900/40 text-[10px] py-2 text-green-300 font-bold hover:bg-green-500 hover:text-black transition-all">SCAN
-                            INTEL</button></div>
-                    <div class="w-1/2"><button onclick="toggleMode()" id="mode-btn"
-                            class="w-full border border-green-500/50 bg-green-500/10 text-[10px] py-2 text-green-400 font-bold">MODE:
-                            NVG</button></div>
-                </div>
-                <div class="flex items-center gap-2"><span class="text-[8px] text-green-600 w-8">GAIN</span><input
-                        type="range" id="gain-slider" min="1" max="5" step="0.1" value="2" class="flex-1"></div>
-            </div>
-        </div>
+    <!-- PIP HQ VIDEO -->
+    <div id="hq-pip" class="absolute top-14 right-2 w-32 h-24 bg-black border border-green-500 z-30 hidden">
+        <div class="absolute top-0 left-0 bg-green-900/80 text-[8px] text-white px-1">HQ FEED</div>
+        <div id="hq-voice-indicator"
+            class="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full m-1 hidden blinking"></div>
     </div>
 
     <script>
-        const config = { gain: 2.0, mode: 'nvg', aiReady: false };
+        // --- CONFIG & STATE ---
+        const config = { mode: 'optical', gain: 1.0 };
         const video = document.getElementById('video');
         const canvas = document.getElementById('outputCanvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const ctx = canvas.getContext('2d');
         const startBtn = document.getElementById('start-btn');
         const errorMsg = document.getElementById('error-msg');
-        const hqPip = document.getElementById('hq-pip-container');
-        const hqVideo = document.getElementById('hq-video');
+        const hqPip = document.getElementById('hq-pip');
 
-        const humanPath = new Path2D("M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM6 14a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2v-4h-4v4H8a2 2 0 0 1-2-2v-6z");
-        const knifePath = new Path2D("M19.4 3.6c-.8-.8-2-.8-2.8 0l-8 8-4 4c-.4.4-.4 1 0 1.4l2.8 2.8c.4.4 1 .4 1.4 0l4-4 8-8c.8-.8.8-2 0-2.8zM5.1 18.9l-1.4 1.4c-.4.4-1 .4-1.4 0-.4-.4-.4-1 0-1.4l1.4-1.4c.2-.2.5-.2.7 0l.7.7c.2.2.2.5 0 .7z");
-
-        let objectDetector, poseDetector, ocrWorker;
-
-        // --- GLOBAL STATE ---
+        let objectDetector = null;
+        let poseDetector = null;
+        let ocrWorker = null;
         let currentGPS = { lat: 0, lon: 0 };
-        let currentThreatStatus = "CLEAR";
         let currentBattery = "100%";
-        let rawCameraStream = null;
+        let currentThreatStatus = "CLEAR";
+
+        // Paths for icons
+        const humanPath = new Path2D("M10 0a4 4 0 110 8 4 4 0 010-8zm0 10c-2.67 0-8 1.34-8 4v6h16v-6c0-2.66-5.33-4-8-4z");
+        const knifePath = new Path2D("M15.5 2.5l-5 5-2.5-2.5 5-5zm-6 6l-6 6-2.5 6 6-2.5 6-6z");
 
         function setLog(id, status, type) {
-            const el = document.querySelector(`#${id} span:last-child`);
-            if (el) {
-                el.className = type === 'ok' ? "log-ok" : (type === 'fail' ? "log-fail" : "log-wait");
-                el.innerText = status;
-            }
-        }
-
-        function showError(msg) {
-            errorMsg.style.display = 'block';
-            errorMsg.innerHTML = `<strong>ERROR:</strong> ${msg}`;
+            const el = document.getElementById(id);
+            let color = type === 'ok' ? 'text-green-500' : (type === 'wait' ? 'text-yellow-500' : 'text-red-500');
+            el.innerHTML = `${el.innerText.split(':')[0]}: <span class="${color}">${status}</span>`;
         }
 
         // --- BATTERY API ---
@@ -441,6 +229,7 @@
 
         function enableStart() {
             startBtn.disabled = false;
+            startBtn.innerText = "ENGAGE SENSORS";
             startBtn.classList.remove('bg-green-900/20', 'border-green-900', 'text-green-700');
             startBtn.classList.add('bg-green-900/50', 'border-green-500', 'text-green-500');
         }
@@ -586,67 +375,97 @@
 
         function initNetworkID() {
             console.log('🌐 Inicializando rede com ID:', myPeerId);
-            peer = new Peer(myPeerId);
+            if (hudId) hudId.innerText = myPeerId + " (CONNECTING...)";
+
+            try {
+                peer = new Peer(myPeerId);
+            } catch (e) {
+                console.error("PeerJS Init Failed:", e);
+                if (window.deltaUI) deltaUI.showNotification("NET INIT FAIL", "error");
+                return;
+            }
 
             peer.on('open', () => {
                 console.log('✅ Rede PeerJS conectada');
+                if (hudId) {
+                    hudId.innerText = myPeerId + " [ONLINE]";
+                    hudId.style.color = "#0f0";
+                    hudId.style.textShadow = "0 0 10px #0f0";
+                }
                 startTelemetryLoop();
+                if (window.deltaUI) deltaUI.showNotification("NETWORK ONLINE", "success");
+            });
+
+            peer.on('error', (err) => {
+                console.error('❌ Erro PeerJS:', err);
+                if (window.deltaUI) deltaUI.showNotification("NET ERROR: " + err.type, "error");
+            });
+
+            peer.on('disconnected', () => {
+                console.warn('⚠️ PeerJS desconectado. Tentando reconectar...');
+                if (hudId) {
+                    hudId.innerText = myPeerId + " [OFFLINE]";
+                    hudId.style.color = "#f00";
+                }
+                peer.reconnect();
+            });
+
+            peer.on('connection', (conn) => {
+                console.log("🔗 Conexão de dados recebida");
+                dataConn = conn;
+
+                conn.on('open', () => {
+                    console.log("✅ Canal de dados aberto");
+                    if (window.deltaUI) deltaUI.showNotification("HQ CONNECTED", "success");
+                    broadcastTelemetry();
+                });
+
+                conn.on('data', (data) => {
+                    if (window.deltaChat) window.deltaChat.receive(data);
+                });
             });
 
             peer.on('call', async (call) => {
                 console.log("📞 Recebendo chamada de video...");
-                if (window.deltaUI) deltaUI.showNotification("INCOMING CALL...", "warning");
+                if (window.deltaUI) deltaUI.showNotification("INCOMING VIDEO CALL...", "warning");
 
                 let streamToUse = window.rawCameraStream;
-                let source = "GLOBAL";
 
+                // Fallback if camera stream is missing
                 if (!streamToUse || streamToUse.getVideoTracks().length === 0) {
-                    console.warn("⚠️ Stream global sem vídeo ou inexistente. Tentando nova captura...");
+                    console.warn("⚠️ Stream de câmera inválido ou sem vídeo. Tentando readquirir...");
                     try {
-                        streamToUse = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: true });
-                        source = "FRESH";
+                        streamToUse = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true });
+                        window.rawCameraStream = streamToUse; // Update global
                     } catch (e) {
-                        console.error("❌ Falha ao obter stream de fallback:", e);
-                        if (window.deltaUI) deltaUI.showNotification("CAMERA FAIL", "error");
-                        return;
+                        console.error("❌ Falha ao adquirir câmera para chamada:", e);
+                        // Answer with audio only if video fails
+                        try {
+                            streamToUse = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        } catch (e2) {
+                            console.error("❌ Falha total de media:", e2);
+                            // Create dummy stream to keep connection alive
+                            const ctx = new AudioContext();
+                            const dst = ctx.createMediaStreamDestination();
+                            streamToUse = dst.stream;
+                        }
                     }
                 }
 
                 const answerStream = new MediaStream();
                 streamToUse.getTracks().forEach(track => answerStream.addTrack(track));
 
-                const vTracks = answerStream.getVideoTracks().length;
-                const aTracks = answerStream.getAudioTracks().length;
-                console.log(`✅ Respondendo chamada. Fonte: ${source}. Tracks - V:${vTracks} A:${aTracks}`);
-
-                if (window.deltaUI) deltaUI.showNotification(`ANSWERING (V:${vTracks} A:${aTracks})`, "success");
-
+                console.log("📤 Respondendo chamada com tracks:", answerStream.getTracks().map(t => t.kind));
                 call.answer(answerStream);
 
-                call.on('stream', (remoteStream) => {
-                    const audio = document.createElement('audio');
-                    audio.srcObject = remoteStream;
-                    audio.play().catch(e => console.log("Autoplay audio prevented:", e));
-                    if (window.deltaUI) deltaUI.showNotification("HQ AUDIO CONNECTED", "info");
+                call.on('close', () => {
+                    console.log("Call closed");
+                    if (window.deltaUI) deltaUI.showNotification("CALL ENDED", "info");
                 });
-            });
 
-            peer.on('connection', (conn) => {
-                dataConn = conn;
-                window.dataConn = conn;
-                conn.on('open', () => {
-                    updateUplinkStatus(true);
-                    broadcastTelemetry();
-                    if (window.deltaUI) deltaUI.showNotification('HQ CONNECTED', 'success');
-                });
-                conn.on('close', () => {
-                    updateUplinkStatus(false);
-                    if (window.deltaUI) deltaUI.showNotification('HQ DISCONNECTED', 'error');
-                });
-                conn.on('data', (data) => {
-                    if (data.type === 'AUDIO_STATUS') document.getElementById('hq-voice-indicator').style.display = data.isTalking ? 'block' : 'none';
-                    if (data.type === 'CAM_STATUS') hqPip.style.display = data.isCamOn ? 'block' : 'none';
-                    if (data.type === 'CHAT_MESSAGE' && window.deltaChat) deltaChat.receive(data.payload.sender, data.payload.text);
+                call.on('error', (e) => {
+                    console.error("Call error:", e);
+                    if (window.deltaUI) deltaUI.showNotification("CALL ERROR", "error");
                 });
             });
         }
@@ -677,6 +496,7 @@
             try {
                 rawCameraStream = await getCameraStream();
                 if (!rawCameraStream) throw new Error("No video stream available");
+                window.rawCameraStream = rawCameraStream;
 
                 video.srcObject = rawCameraStream;
                 await video.play();
@@ -696,7 +516,8 @@
                 aiLoop();
             } catch (e) {
                 console.error('❌ Erro ao ativar câmera:', e);
-                showError(e.message + ". Check permissions.");
+                document.getElementById('error-msg').innerText = e.message + ". Check permissions.";
+                document.getElementById('error-msg').style.display = 'block';
                 startBtn.innerText = "RETRY";
             }
         }
