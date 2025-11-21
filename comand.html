@@ -182,48 +182,7 @@
             log('ERROR: ' + err.type);
         });
 
-        function connectToSoldier() {
-            const soldierId = remoteIdInput.value.trim();
-            if (!soldierId) {
-                alert("ENTER UNIT ID");
-                return;
-            }
-
-            log('INITIATING UPLINK TO ' + soldierId + '...');
-
-            // 1. Connect Data Channel
-            dataConn = peer.connect(soldierId);
-
-            if (dataConn) {
-                dataConn.on('open', () => {
-                    log('DATA CHANNEL OPEN');
-                    dataStatus.innerText = "ONLINE";
-                    dataStatus.classList.add('text-green-500');
-                });
-
-                dataConn.on('data', (data) => {
-                    if (data.type === 'TELEMETRY') {
-                        remoteBat.innerText = data.payload.bat + '%';
-                        remoteGps.innerText = `${data.payload.lat}, ${data.payload.lon}`;
-                    }
-                });
-
-                dataConn.on('close', () => {
-                    log('DATA CHANNEL LOST');
-                    dataStatus.innerText = "OFFLINE";
-                    dataStatus.classList.remove('text-green-500');
-                });
-            }
-
-            // 2. Connect Video Stream
-            // Create a dummy stream to satisfy PeerJS call requirement
-            const canvas = document.createElement('canvas');
-            canvas.width = 10;
-            canvas.height = 10;
-            const stream = canvas.captureStream(1);
-
-            const call = peer.call(soldierId, stream);
-
+        function setupCallEvents(call) {
             call.on('stream', (remoteStream) => {
                 log('VIDEO STREAM EVENT FIRED');
 
@@ -237,7 +196,6 @@
                     const vTrack = videoTracks[0];
                     log(`V-TRACK: ${vTrack.label} | ${vTrack.readyState} | Enabled:${vTrack.enabled}`);
 
-                    // Monitor track ending
                     vTrack.onended = () => log('V-TRACK ENDED UNEXPECTEDLY');
                     vTrack.onmute = () => log('V-TRACK MUTED (Network issue?)');
                     vTrack.onunmute = () => log('V-TRACK UNMUTED');
@@ -272,6 +230,60 @@
             call.on('error', (err) => {
                 log('CALL ERROR: ' + err);
             });
+        }
+
+        function connectToSoldier() {
+            const soldierId = remoteIdInput.value.trim();
+            if (!soldierId) {
+                alert("ENTER UNIT ID");
+                return;
+            }
+
+            log('INITIATING UPLINK TO ' + soldierId + '...');
+
+            // 1. Connect Data Channel
+            dataConn = peer.connect(soldierId);
+
+            if (dataConn) {
+                dataConn.on('open', () => {
+                    log('DATA CHANNEL OPEN');
+                    dataStatus.innerText = "ONLINE";
+                    dataStatus.classList.add('text-green-500');
+                });
+
+                dataConn.on('data', (data) => {
+                    if (data.type === 'TELEMETRY') {
+                        remoteBat.innerText = data.payload.bat + '%';
+                        remoteGps.innerText = `${data.payload.lat}, ${data.payload.lon}`;
+                    }
+                });
+
+                dataConn.on('close', () => {
+                    log('DATA CHANNEL LOST');
+                    dataStatus.innerText = "OFFLINE";
+                    dataStatus.classList.remove('text-green-500');
+                });
+            }
+
+            // 2. Connect Video/Audio Stream
+            log('REQUESTING MICROPHONE ACCESS...');
+            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                .then((myStream) => {
+                    log('MICROPHONE ACCESS GRANTED');
+                    const call = peer.call(soldierId, myStream);
+                    setupCallEvents(call);
+                })
+                .catch((err) => {
+                    log('MIC ERROR: ' + err.message);
+                    log('FALLING BACK TO VIDEO-ONLY RECEIVER');
+
+                    // Fallback to dummy stream
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 10; canvas.height = 10;
+                    const stream = canvas.captureStream(1);
+                    const call = peer.call(soldierId, stream);
+                    setupCallEvents(call);
+                });
         }
     </script>
 </body>
