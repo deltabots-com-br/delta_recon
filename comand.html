@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DELTA COMMAND OS v2.1</title>
+    <title>DELTA COMMAND OS v2.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -79,7 +79,7 @@
                 onerror="this.style.display='none'">
             <div>
                 <h1 class="text-xl font-bold tracking-widest text-green-500">COMMAND OS <span
-                        class="text-xs text-green-800">v2.1</span></h1>
+                        class="text-xs text-green-800">v2.2</span></h1>
                 <div class="text-[10px] text-green-700 tracking-[0.3em]">TACTICAL OPERATIONS CENTER</div>
             </div>
         </div>
@@ -439,6 +439,46 @@
         function addToGrid(id, stream) {
             const grid = document.getElementById('video-grid');
             // Remove placeholder
+            if (grid.children[0].innerText.includes('NO VIDEO')) grid.innerHTML = '';
+
+            // Evita duplicatas
+            if (document.getElementById(`grid-vid-${id}`)) return;
+
+            const wrap = document.createElement('div');
+            wrap.id = `grid-vid-${id}`;
+            wrap.className = "grid-video";
+            wrap.innerHTML = `
+                <video autoplay playsinline muted class="w-full h-full object-cover"></video>
+                <div class="absolute top-0 left-0 bg-black/50 text-[10px] px-1 text-white font-bold">${id}</div>
+                <div class="absolute bottom-0 right-0 p-1">
+                    <button onclick="toggleGridAudio('${id}')" class="bg-green-900/50 text-[8px] px-1 text-white border border-green-500 hover:bg-green-500 hover:text-black">UNMUTE</button>
+                </div>
+            `;
+            const vid = wrap.querySelector('video');
+            vid.srcObject = stream;
+
+            // Forçar play com tratamento de erro
+            vid.play().catch(e => logSystem(`AUTOPLAY BLOCKED FOR ${id}: ${e.message}`));
+
+            grid.appendChild(wrap);
+        }
+
+        function toggleGridAudio(id) {
+            const wrap = document.getElementById(`grid-vid-${id}`);
+            if (wrap) {
+                const vid = wrap.querySelector('video');
+                vid.muted = !vid.muted;
+                const btn = wrap.querySelector('button');
+                btn.innerText = vid.muted ? "UNMUTE" : "MUTE";
+                btn.classList.toggle('bg-red-900', !vid.muted);
+            }
+        }
+
+        // --- MAPS ---
+        const map = L.map('map').setView([-23.5505, -46.6333], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            subdomains: 'abcd',
             maxZoom: 20
         }).addTo(map);
 
