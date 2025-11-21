@@ -349,30 +349,6 @@
 
                 // Handle Data Connection (Telemetry)
                 peer.on('connection', (conn) => {
-                    console.log("Data connection received");
-                    dataConn = conn;
-                    statusEl.innerText = "DATA LINK ESTABLISHED";
-                });
-
-                // Handle Video Call
-                peer.on('call', (call) => {
-                    statusEl.classList.remove('animate-pulse');
-                    statusEl.innerText = "UPLINK ESTABLISHED: " + call.peer;
-                    statusEl.style.color = "#0f0";
-
-                    call.answer(localStream);
-
-                    call.on('close', () => {
-                        statusEl.innerText = "UPLINK LOST. AWAITING...";
-                        statusEl.style.color = "#0f0";
-                        statusEl.classList.add('animate-pulse');
-                    });
-                });
-
-                peer.on('error', (err) => {
-                    console.error("Peer Error:", err);
-                    statusEl.innerText = "ERR: " + err.type;
-                    statusEl.style.color = "#f00";
                 });
 
                 peer.on('disconnected', () => {
