@@ -246,6 +246,29 @@
 
             if (dataConn) {
                 dataConn.on('open', () => {
+                    log('DATA CHANNEL SECURE');
+                    dataStatus.innerText = "ONLINE";
+                    dataStatus.classList.add('text-green-500');
+                });
+
+                dataConn.on('data', (data) => {
+                    if (data.type === 'LOG') {
+                        log(data.payload);
+                    } else if (data.type === 'TELEMETRY') {
+                        const t = data.payload;
+                        remoteBat.innerText = t.bat + '%';
+                        remoteGps.innerText = `${t.lat}, ${t.lon}`;
+                    }
+                });
+
+                dataConn.on('close', () => {
+                    log('DATA CHANNEL LOST');
+                    dataStatus.innerText = "OFFLINE";
+                    dataStatus.classList.remove('text-green-500');
+                });
+
+                dataConn.on('error', (err) => {
+                    log('DATA ERROR: ' + err);
                 });
             }
 
