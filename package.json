@@ -4,18 +4,11 @@
   "description": "Sistema de Operações Táticas - Delta Recon",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "node server.js"
   },
-  "keywords": [
-    "tactical",
-    "military",
-    "surveillance",
-    "webrtc"
-  ],
-  "author": "Delta Recon Team",
-  "license": "MIT",
   "engines": {
     "node": ">=14.0.0"
-  }
+  },
+  "dependencies": {},
+  "devDependencies": {}
 }
