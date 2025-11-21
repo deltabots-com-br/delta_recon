@@ -446,76 +446,15 @@
         const myPeerId = "OP-" + Math.floor(Math.random() * 900 + 100);
         window.myPeerId = myPeerId;
 
-        const hudId = document.getElementById('hud-unit-id');
-        if (hudId) hudId.innerText = myPeerId;
-
-        function initNetworkID() {
-            console.log('🌐 Inicializando rede com ID:', myPeerId);
-            peer = new Peer(myPeerId);
-
-            peer.on('open', () => {
-                console.log('✅ Rede PeerJS conectada');
-                startTelemetryLoop();
-            });
-
-            peer.on('call', (call) => {
-                console.log("📞 RECEBENDO CHAMADA DE:", call.peer);
-                if (window.deltaUI) deltaUI.showNotification(`INCOMING CALL: ${call.peer}`, 'warning');
-
-                const streamToSend = rawCameraStream || localStream;
-
-                if (streamToSend) {
-                    call.answer(streamToSend);
-                    console.log("✅ Chamada atendida com stream");
-                } else {
-                    console.error("❌ Nenhum stream disponível para atender");
-                    if (window.deltaUI) deltaUI.showNotification('CALL ERROR: NO STREAM', 'error');
-                }
-
-                updateUplinkStatus(true);
-
-                call.on('stream', (remoteStream) => {
-                    console.log("📡 Stream remoto recebido");
-                    const audioEl = document.getElementById('remote-audio');
-                    audioEl.srcObject = remoteStream;
-                    audioEl.play().catch(e => console.log("Audio autoplay prevented:", e));
-
-                    hqVideo.srcObject = remoteStream;
-                    hqVideo.play().catch(e => console.log("Video autoplay prevented:", e));
-
-                    const vidTracks = remoteStream.getVideoTracks();
-                    if (vidTracks.length > 0) {
-                        hqPip.style.display = 'block';
-                        vidTracks[0].onmute = () => hqPip.style.display = 'none';
-                        vidTracks[0].onunmute = () => hqPip.style.display = 'block';
-                    }
-                });
-            });
-
-            peer.on('connection', (conn) => {
-                dataConn = conn;
-                window.dataConn = conn;
-                conn.on('open', () => {
-                    updateUplinkStatus(true);
-                    broadcastTelemetry();
-                    if (window.deltaUI) deltaUI.showNotification('HQ CONNECTED', 'success');
-                });
-                conn.on('close', () => {
-                    updateUplinkStatus(false);
-                    if (window.deltaUI) deltaUI.showNotification('HQ DISCONNECTED', 'error');
-                });
-                conn.on('data', (data) => {
-                    if (data.type === 'AUDIO_STATUS') document.getElementById('hq-voice-indicator').style.display = data.isTalking ? 'block' : 'none';
-                    if (data.type === 'CAM_STATUS') hqPip.style.display = data.isCamOn ? 'block' : 'none';
-                    if (data.type === 'CHAT_MESSAGE' && window.deltaChat) deltaChat.receive(data.payload.sender, data.payload.text);
-                });
-            });
-        }
-
-        function updateUplinkStatus(connected) {
-            document.getElementById('uplink-status').innerHTML = connected ? "UPLINK: <span style='color:#0f0'>SECURE</span>" : "UPLINK: <span style='color:red'>STANDBY</span>";
-        }
-
+        conn.on('open', () => {
+            updateUplinkStatus(true);
+            broadcastTelemetry();
+            if (window.deltaUI) deltaUI.showNotification('HQ CONNECTED', 'success');
+        });
+        conn.on('close', () => {
+            updateUplinkStatus(false);
+            if (window.deltaUI) deltaUI.showNotification('HQ DISCONNECTED', 'error');
+        });
         async function getCameraStream() {
             console.log('📹 Tentando acessar câmera...');
             try {
