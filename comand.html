@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DELTA COMMAND OS v2.0</title>
+    <title>DELTA COMMAND OS v2.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -79,7 +79,7 @@
                 onerror="this.style.display='none'">
             <div>
                 <h1 class="text-xl font-bold tracking-widest text-green-500">COMMAND OS <span
-                        class="text-xs text-green-800">v2.0</span></h1>
+                        class="text-xs text-green-800">v2.1</span></h1>
                 <div class="text-[10px] text-green-700 tracking-[0.3em]">TACTICAL OPERATIONS CENTER</div>
             </div>
         </div>
@@ -223,6 +223,29 @@
             document.getElementById('sys-time').innerText = new Date().toLocaleTimeString();
         }, 1000);
 
+        // --- AUDIO & MEDIA ---
+        let localStream = null;
+
+        async function initAudio() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                logSystem("HQ AUDIO SYSTEMS ONLINE");
+            } catch (e) {
+                logSystem("HQ AUDIO FAILED: " + e.message);
+                // Cria stream vazio para poder receber video mesmo sem mic
+                const ctx = new AudioContext();
+                const osc = ctx.createOscillator();
+                const dst = ctx.createMediaStreamDestination();
+                osc.connect(dst);
+                localStream = dst.stream;
+            }
+        }
+
+        // Inicializa audio ao carregar (clique na pagina pode ser necessario)
+        document.body.addEventListener('click', () => {
+            if (!localStream) initAudio();
+        }, { once: true });
+
         // --- PEERJS ---
         const peer = new Peer(myPeerId);
 
@@ -236,15 +259,57 @@
         });
 
         peer.on('call', (call) => {
-            handleCall(call);
+            // Recebendo chamada (Soldado ligando para HQ)
+            logSystem(`INCOMING CALL FROM: ${call.peer}`);
+            call.answer(localStream); // Responde com nosso audio
+            setupCallEvents(call);
         });
 
         function connectToPeer() {
             const id = document.getElementById('remote-id-input').value.trim();
             if (!id) return;
+
+            if (!localStream) {
+                logSystem("WAITING FOR AUDIO PERMISSION...");
+                initAudio().then(() => performConnect(id));
+            } else {
+                performConnect(id);
+            }
+        }
+
+        function performConnect(id) {
             logSystem(`ATTEMPTING CONNECTION TO: ${id}...`);
+
+            // 1. Data Connection
             const conn = peer.connect(id);
             handleConnection(conn);
+
+            // 2. Media Call (Para receber o video)
+            logSystem(`CALLING ${id} FOR VIDEO FEED...`);
+            const call = peer.call(id, localStream);
+            setupCallEvents(call);
+        }
+
+        function setupCallEvents(call) {
+            call.on('stream', (remoteStream) => {
+                logSystem(`VIDEO FEED RECEIVED: ${call.peer}`);
+                if (state.peers[call.peer]) {
+                    state.peers[call.peer].call = call;
+                    state.peers[call.peer].stream = remoteStream;
+
+                    // Se for o selecionado, mostra no PIP
+                    if (state.selectedPeerId === call.peer) {
+                        showPip(call.peer);
+                    }
+
+                    // Adiciona ao Grid
+                    addToGrid(call.peer, remoteStream);
+                }
+            });
+
+            call.on('error', (err) => {
+                logSystem(`CALL ERROR: ${err}`);
+            });
         }
 
         function handleConnection(conn) {
@@ -267,25 +332,6 @@
             conn.on('close', () => {
                 logSystem(`LOST CONNECTION: ${conn.peer}`);
                 removeAsset(conn.peer);
-            });
-        }
-
-        function handleCall(call) {
-            call.answer();
-            call.on('stream', (remoteStream) => {
-                logSystem(`VIDEO FEED RECEIVED: ${call.peer}`);
-                if (state.peers[call.peer]) {
-                    state.peers[call.peer].call = call;
-                    state.peers[call.peer].stream = remoteStream;
-
-                    // Se for o selecionado, mostra no PIP
-                    if (state.selectedPeerId === call.peer) {
-                        showPip(call.peer);
-                    }
-
-                    // Adiciona ao Grid
-                    addToGrid(call.peer, remoteStream);
-                }
             });
         }
 
