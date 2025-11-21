@@ -280,31 +280,41 @@
         function performConnect(id) {
             logSystem(`ATTEMPTING CONNECTION TO: ${id}...`);
 
+            // PRE-INITIALIZE PEER STATE
+            if (!state.peers[id]) {
+                state.peers[id] = { id: id, type: 'UNKNOWN', lastSeen: Date.now() };
+                addAssetToSidebar(id);
+            }
+
             // 1. Data Connection
             const conn = peer.connect(id);
+            state.peers[id].conn = conn;
             handleConnection(conn);
 
-            // 2. Media Call (Para receber o video)
+            // 2. Media Call
             logSystem(`CALLING ${id} FOR VIDEO FEED...`);
             const call = peer.call(id, localStream);
+            state.peers[id].call = call;
             setupCallEvents(call);
         }
 
         function setupCallEvents(call) {
             call.on('stream', (remoteStream) => {
                 logSystem(`VIDEO FEED RECEIVED: ${call.peer}`);
-                if (state.peers[call.peer]) {
-                    state.peers[call.peer].call = call;
-                    state.peers[call.peer].stream = remoteStream;
 
-                    // Se for o selecionado, mostra no PIP
-                    if (state.selectedPeerId === call.peer) {
-                        showPip(call.peer);
-                    }
-
-                    // Adiciona ao Grid
-                    addToGrid(call.peer, remoteStream);
+                if (!state.peers[call.peer]) {
+                    state.peers[call.peer] = { id: call.peer, type: 'UNKNOWN', lastSeen: Date.now() };
+                    addAssetToSidebar(call.peer);
                 }
+
+                state.peers[call.peer].call = call;
+                state.peers[call.peer].stream = remoteStream;
+
+                if (state.selectedPeerId === call.peer) {
+                    showPip(call.peer);
+                }
+
+                addToGrid(call.peer, remoteStream);
             });
 
             call.on('error', (err) => {
@@ -314,14 +324,12 @@
 
         function handleConnection(conn) {
             conn.on('open', () => {
-                if (state.peers[conn.peer]) {
-                    logSystem(`RECONNECTED: ${conn.peer}`);
-                    state.peers[conn.peer].conn = conn;
-                } else {
-                    logSystem(`NEW ASSET CONNECTED: ${conn.peer}`);
-                    state.peers[conn.peer] = { conn: conn, id: conn.peer, type: 'UNKNOWN', lastSeen: Date.now() };
+                logSystem(`CONNECTION ESTABLISHED: ${conn.peer}`);
+                if (!state.peers[conn.peer]) {
+                    state.peers[conn.peer] = { id: conn.peer, type: 'UNKNOWN', lastSeen: Date.now() };
                     addAssetToSidebar(conn.peer);
                 }
+                state.peers[conn.peer].conn = conn;
                 updateActiveCount();
             });
 
