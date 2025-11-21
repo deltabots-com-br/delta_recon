@@ -24,6 +24,14 @@ const server = http.createServer((req, res) => {
 
     // Define o arquivo solicitado
     let filePath = '.' + req.url;
+
+    // Rota de Health Check para o EasyPanel/Docker
+    if (req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('OK');
+        return;
+    }
+
     if (filePath === './') {
         filePath = './soldier.html'; // Página padrão
     }
