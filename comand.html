@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DELTA COMMAND OS v2.2</title>
+    <title>DELTA COMMAND OS v2.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -79,7 +79,7 @@
                 onerror="this.style.display='none'">
             <div>
                 <h1 class="text-xl font-bold tracking-widest text-green-500">COMMAND OS <span
-                        class="text-xs text-green-800">v2.2</span></h1>
+                        class="text-xs text-green-800">v2.3</span></h1>
                 <div class="text-[10px] text-green-700 tracking-[0.3em]">TACTICAL OPERATIONS CENTER
                 </div>
             </div>
@@ -286,6 +286,12 @@
         peer.on('open', (id) => {
             logSystem(`HQ ONLINE. ID: ${id}`);
             document.getElementById('my-id').classList.add('text-green-400');
+            if (!localStream) {
+                logSystem("WAITING FOR AUDIO PERMISSION...");
+                initAudio().then(() => {
+                    // Ready
+                });
+            }
         });
 
         peer.on('connection', (conn) => {
@@ -296,6 +302,13 @@
             logSystem(`INCOMING CALL FROM: ${call.peer}`);
             call.answer(localStream);
             setupCallEvents(call);
+        });
+
+        peer.on('error', (err) => {
+            logSystem(`❌ PEER ERROR: ${err.type}`);
+            if (err.type === 'peer-unavailable') {
+                logSystem(`⚠️ UNIT ${err.message.split(' ').pop()} NOT FOUND OR OFFLINE`);
+            }
         });
 
         function connectToPeer() {
