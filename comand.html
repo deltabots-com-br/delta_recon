@@ -35,14 +35,32 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            position: relative;
+            background: #000;
+            overflow: hidden;
+        }
+
+        video {
+            width: 100%;
+            max-width: 100%;
+            /* Force Square Aspect Ratio */
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
+            /* Night Vision Filter */
+            filter: sepia(100%) hue-rotate(90deg) saturate(300%) contrast(1.2) brightness(1.1);
+            box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.8);
+        }
+
+        .scanlines {
+            position: absolute;
             top: 0;
             left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-            background-size: 100% 2px, 3px 100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0) 50%, rgba(0, 0, 0, 0.2) 50%, rgba(0, 0, 0, 0.2));
+            background-size: 100% 4px;
             pointer-events: none;
-            z-index: 5;
+            z-index: 10;
         }
 
         .panel {
@@ -75,12 +93,11 @@
         }
 
         #map {
-            height: 300px;
-            /* Taller map */
+            height: 100%;
+            min-height: 200px;
             width: 100%;
             background: #111;
             border: 1px solid #333;
-            margin-top: 8px;
         }
 
         /* Custom Dark Map Tiles Filter */
@@ -143,7 +160,9 @@
                 </div>
 
                 <!-- Map Container -->
-                <div id="map" class="flex-1"></div>
+                <div id="map-container" class="flex-1 border border-gray-800 mt-2">
+                    <div id="map"></div>
+                </div>
             </div>
         </div>
 
@@ -156,7 +175,7 @@
             </div>
 
             <!-- Video Wrapper -->
-            <div class="video-wrapper relative">
+            <div class="video-wrapper">
                 <!-- Scanlines Overlay -->
                 <div class="scanlines"></div>
 
@@ -253,6 +272,68 @@
             log('ERROR: ' + err.type);
         });
 
+        function connectToSoldier() {
+            const destId = remoteIdInput.value.toUpperCase();
+            if (!destId) {
+                log('INVALID UNIT ID');
+                return;
+            }
+            log('INITIATING UPLINK TO ' + destId + '...');
+
+            // 1. Open Data Connection
+            const conn = peer.connect(destId);
+            conn.on('open', () => {
+                log('DATA UPLINK ESTABLISHED');
+                dataStatus.innerText = "ONLINE";
+                dataStatus.classList.add('text-green-500');
+                dataConn = conn;
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === 'LOG') {
+                    log(data.payload);
+                } else if (data.type === 'TELEMETRY') {
+                    // Update Battery
+                    remoteBat.innerText = data.payload.bat + '%';
+
+                    // Update GPS
+                    if (data.payload.lat !== 0) {
+                        remoteGps.innerText = `${data.payload.lat}, ${data.payload.lon}`;
+                        updateMap(data.payload.lat, data.payload.lon);
+                    }
+                }
+            });
+
+            conn.on('close', () => {
+                log('DATA UPLINK LOST');
+                dataStatus.innerText = "OFFLINE";
+                dataStatus.classList.remove('text-green-500');
+            });
+
+            // 2. Call for Video (Send Dummy Stream to trigger answer)
+            // Create a dummy canvas stream so we have something to offer
+            const canvas = document.createElement('canvas');
+            canvas.width = 640;
+            canvas.height = 480;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'green';
+            ctx.fillRect(0, 0, 640, 480);
+            const stream = canvas.captureStream(10);
+
+            // Add a dummy audio track too
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            const dst = audioCtx.createMediaStreamDestination();
+            osc.connect(dst);
+            osc.start();
+            const audioTrack = dst.stream.getAudioTracks()[0];
+            stream.addTrack(audioTrack);
+
+            log('SENDING SIGNAL...');
+            const call = peer.call(destId, stream);
+            setupCallEvents(call);
+        }
+
         function setupCallEvents(call) {
             call.on('stream', (remoteStream) => {
                 log('VIDEO STREAM EVENT FIRED');
@@ -303,94 +384,17 @@
             });
         }
 
-        async function connectToSoldier() {
-            const soldierId = remoteIdInput.value.trim();
-            if (!soldierId) {
-                alert("ENTER UNIT ID");
-                return;
-            }
-
-            log('INITIATING UPLINK TO ' + soldierId + '...');
-
-            // 1. Connect Data Channel
-            dataConn = peer.connect(soldierId);
-
-            if (dataConn) {
-                dataConn.on('open', () => {
-                    log('DATA CHANNEL SECURE');
-                    dataStatus.innerText = "ONLINE";
-                    dataStatus.classList.add('text-green-500');
-                });
-
-                dataConn.on('data', (data) => {
-                    if (data.type === 'LOG') {
-                        log(data.payload);
-                    } else if (data.type === 'TELEMETRY') {
-                        const t = data.payload;
-                        remoteBat.innerText = t.bat + '%';
-                        remoteGps.innerText = `${t.lat}, ${t.lon}`;
-                        updateMap(t.lat, t.lon);
-                    }
-                });
-
-                dataConn.on('close', () => {
-                    log('DATA CHANNEL LOST');
-                    dataStatus.innerText = "OFFLINE";
-                    dataStatus.classList.remove('text-green-500');
-                });
-
-                dataConn.on('error', (err) => {
-                    log('DATA ERROR: ' + err);
-                });
-            }
-
-            // 2. Prepare Outgoing Stream (Audio + Dummy Video)
-            // We MUST send a video track (even dummy) so the Soldier can answer with video.
-            log('PREPARING UPLINK STREAM...');
-
-            try {
-                // Create Dummy Video (Canvas)
-                const canvas = document.createElement('canvas');
-                canvas.width = 640; canvas.height = 480;
-                const ctx = canvas.getContext('2d');
-
-                // Animate it slightly to ensure track stays active
-                setInterval(() => {
-                    ctx.fillStyle = Math.random() > 0.5 ? '#000' : '#111';
-                    ctx.fillRect(0, 0, 640, 480);
-                    ctx.fillStyle = '#0f0';
-                    ctx.fillText("HQ UPLINK " + Date.now(), 10, 50);
-                }, 1000);
-
-                const canvasStream = canvas.captureStream(15);
-                const videoTrack = canvasStream.getVideoTracks()[0];
-
-                // Get Audio
-                let audioStream;
-                try {
-                    audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    log('MICROPHONE ACCESS GRANTED');
-                } catch (e) {
-                    log('MIC FAILED: ' + e.message);
-                    // Continue without audio
-                }
-
-                // Combine
-                const finalStream = new MediaStream();
-                finalStream.addTrack(videoTrack);
-                if (audioStream) {
-                    audioStream.getAudioTracks().forEach(t => finalStream.addTrack(t));
-                }
-
-                // Call
-                log('SENDING UPLINK SIGNAL...');
-                const call = peer.call(soldierId, finalStream);
-                setupCallEvents(call);
-
-            } catch (err) {
-                log('CRITICAL STREAM ERROR: ' + err.message);
-            }
-        }
+        // Handle incoming calls (if Soldier calls HQ back)
+        peer.on('call', (call) => {
+            log('INCOMING CALL FROM UNIT');
+            // Answer with dummy stream
+            const canvas = document.createElement('canvas');
+            canvas.width = 640;
+            canvas.height = 480;
+            const stream = canvas.captureStream(10);
+            call.answer(stream);
+            setupCallEvents(call);
+        });
     </script>
 </body>
 
