@@ -83,487 +83,197 @@
             <!-- Connection Panel -->
             <div class="panel p-4 flex flex-col gap-2">
                 <h2 class="text-xs text-gray-500 uppercase font-bold">Unit Uplink</h2>
-                <!DOCTYPE html>
-                <html lang="en">
+                <input type="text" id="remoteId" placeholder="UNIT ID (e.g. OP-123)"
+                    class="text-sm font-mono uppercase">
+                <button onclick="connectToSoldier()" class="btn-primary text-sm uppercase tracking-wider">ESTABLISH
+                    LINK</button>
+            </div>
 
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Command Center - Tactical View</title>
-                    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-                    <script src="https://cdn.tailwindcss.com"></script>
-                    <style>
-                        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+            <!-- Status Panel -->
+            <div class="panel p-4 flex-1 flex flex-col gap-2">
+                <h2 class="text-xs text-gray-500 uppercase font-bold mb-2">Mission Log</h2>
+                <div id="status-log" class="text-xs font-mono space-y-1 text-gray-300 flex-1 overflow-y-auto h-32">
+                    <div>> SYSTEM READY</div>
+                </div>
 
-                        body {
-                            background: #0a0a0a;
-                            color: #e0e0e0;
-                            font-family: 'Share Tech Mono', monospace;
-                            height: 100vh;
-                            display: flex;
-                            flex-direction: column;
-                            overflow: hidden;
-                        }
-
-                        /* Grid Background */
-                        .bg-grid {
-                            background-image: linear-gradient(rgba(0, 255, 0, 0.05) 1px, transparent 1px),
-                                linear-gradient(90deg, rgba(0, 255, 0, 0.05) 1px, transparent 1px);
-                            background-size: 20px 20px;
-                        }
-
-                        video {
-                            border: 1px solid #333;
-                            background: #000;
-                            width: 100%;
-                            height: 100%;
-                            object-fit: contain;
-                        }
-
-                        .panel {
-                            background: rgba(10, 15, 10, 0.9);
-                            border: 1px solid #1f2937;
-                        }
-
-                        .btn-primary {
-                            background: #059669;
-                            color: #fff;
-                            padding: 0.5rem 1rem;
-                            font-weight: bold;
-                            transition: all 0.2s;
-                        }
-
-                        .btn-primary:hover {
-                            background: #10b981;
-                        }
-
-                        input {
-                            background: #111;
-                            border: 1px solid #333;
-                            color: #0f0;
-                            padding: 0.5rem;
-                            outline: none;
-                        }
-
-                        input:focus {
-                            border-color: #059669;
-                        }
-                    </style>
-                </head>
-
-                <body class="bg-grid">
-                    <!-- Header -->
-                    <header class="bg-black border-b border-green-900 p-3 flex justify-between items-center">
-                        <div class="flex items-center gap-2">
-                            <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                            <h1 class="text-xl font-bold text-green-500 tracking-widest">TACTICAL COMMAND CENTER</h1>
+                <!-- Telemetry Display -->
+                <div class="border-t border-gray-800 pt-2 mt-2">
+                    <h2 class="text-xs text-gray-500 uppercase font-bold mb-1">Telemetry</h2>
+                    <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+                        <div>
+                            <div class="text-gray-500">BATTERY</div>
+                            <div id="remote-bat" class="text-green-400 font-bold">--%</div>
                         </div>
-                        <div id="my-id" class="text-sm text-gray-400">INITIALIZING...</div>
-                    </header>
+                        <div>
+                            <div class="text-gray-500">SIGNAL</div>
+                            <div class="text-green-400 font-bold">STRONG</div>
+                        </div>
+                        <div class="col-span-2">
+                            <div class="text-gray-500">GPS COORDS</div>
+                            <div id="remote-gps" class="text-yellow-400 font-bold">WAITING DATA...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                    <!-- Main Layout -->
-                    <div class="flex flex-1 p-2 gap-2 overflow-hidden">
-                        <!-- Sidebar -->
-                        <div class="w-64 flex flex-col gap-2">
-                            <!-- Connection Panel -->
-                            <div class="panel p-4 flex flex-col gap-2">
-                                <h2 class="text-xs text-gray-500 uppercase font-bold">Unit Uplink</h2>
-                                <input type="text" id="remoteId" placeholder="UNIT ID (e.g. OP-123)"
-                                    class="text-sm font-mono uppercase">
-                                <button onclick="connectToSoldier()"
-                                    class="btn-primary text-sm uppercase tracking-wider">ESTABLISH
-                                    LINK</button>
-                            </div>
+        <!-- Main View -->
+        <div class="flex-1 panel relative flex flex-col bg-black">
+            <div
+                class="absolute top-2 left-2 z-10 bg-black/50 px-2 py-1 text-xs text-green-400 border border-green-900 flex gap-2">
+                <span>LIVE FEED: <span id="feed-status">OFFLINE</span></span>
+                <span>DATA LINK: <span id="data-status">OFFLINE</span></span>
+            </div>
 
-                            <!-- Status Panel -->
-                            <div class="panel p-4 flex-1 flex flex-col gap-2">
-                                <h2 class="text-xs text-gray-500 uppercase font-bold mb-2">Mission Log</h2>
-                                <div id="status-log"
-                                    class="text-xs font-mono space-y-1 text-gray-300 flex-1 overflow-y-auto h-32">
-                                    <div>> SYSTEM READY</div>
-                                </div>
+            <!-- Video Element with Muted for Autoplay -->
+            <video id="remoteVideo" autoplay playsinline muted controls class="w-full h-full object-contain"></video>
 
-                                <!-- Telemetry Display -->
-                                <div class="border-t border-gray-800 pt-2 mt-2">
-                                    <h2 class="text-xs text-gray-500 uppercase font-bold mb-1">Telemetry</h2>
-                                    <div class="grid grid-cols-2 gap-2 text-xs font-mono">
-                                        <div>
-                                            <div class="text-gray-500">BATTERY</div>
-                                            <div id="remote-bat" class="text-green-400 font-bold">--%</div>
-                                        </div>
-                                        <div>
-                                            <div class="text-gray-500">SIGNAL</div>
-                                            <div class="text-green-400 font-bold">STRONG</div>
-                                        </div>
-                                        <div class="col-span-2">
-                                            <div class="text-gray-500">GPS COORDS</div>
-                                            <div id="remote-gps" class="text-yellow-400 font-bold">WAITING DATA...</div>
-                                        </div>
-                                    </div>
-                                </div>
-                                ```html
-                                <script src="https://cdn.tailwindcss.com"></script>
-                                <style>
-                                    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+            <!-- Manual Play Button Overlay (Hidden by default) -->
+            <div id="play-overlay" class="absolute inset-0 flex items-center justify-center bg-black/80 z-20 hidden">
+                <button onclick="forcePlay()"
+                    class="btn-primary text-xl px-6 py-3 border-2 border-green-500 animate-pulse">
+                    CLICK TO ENABLE VIDEO FEED
+                </button>
+            </div>
+        </div>
+    </div>
 
-                                    body {
-                                        background: #0a0a0a;
-                                        color: #e0e0e0;
-                                        font-family: 'Share Tech Mono', monospace;
-                                        height: 100vh;
-                                        display: flex;
-                                        flex-direction: column;
-                                        overflow: hidden;
-                                    }
+    <script>
+        const remoteVideo = document.getElementById('remoteVideo');
+        const playOverlay = document.getElementById('play-overlay');
+        const logEl = document.getElementById('status-log');
+        const remoteIdInput = document.getElementById('remoteId');
+        const myIdEl = document.getElementById('my-id');
+        const feedStatus = document.getElementById('feed-status');
+        const dataStatus = document.getElementById('data-status');
+        const remoteBat = document.getElementById('remote-bat');
+        const remoteGps = document.getElementById('remote-gps');
 
-                                    /* Grid Background */
-                                    .bg-grid {
-                                        background-image: linear-gradient(rgba(0, 255, 0, 0.05) 1px, transparent 1px),
-                                            linear-gradient(90deg, rgba(0, 255, 0, 0.05) 1px, transparent 1px);
-                                        background-size: 20px 20px;
-                                    }
+        let peer = null;
+        let dataConn = null;
 
-                                    video {
-                                        border: 1px solid #333;
-                                        background: #000;
-                                        width: 100%;
-                                        height: 100%;
-                                        object-fit: contain;
-                                    }
+        function log(msg) {
+            const div = document.createElement('div');
+            div.innerText = `> ${msg}`;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
 
-                                    .panel {
-                                        background: rgba(10, 15, 10, 0.9);
-                                        border: 1px solid #1f2937;
-                                    }
+        function forcePlay() {
+            remoteVideo.play().then(() => {
+                playOverlay.classList.add('hidden');
+                log('PLAYBACK STARTED MANUALLY');
+            }).catch(e => {
+                log('MANUAL PLAY ERROR: ' + e.message);
+            });
+        }
 
-                                    .btn-primary {
-                                        background: #059669;
-                                        color: #fff;
-                                        padding: 0.5rem 1rem;
-                                        font-weight: bold;
-                                        transition: all 0.2s;
-                                    }
+        // Init PeerJS
+        const myId = "HQ-" + Math.floor(Math.random() * 100);
+        peer = new Peer(myId);
 
-                                    .btn-primary:hover {
-                                        background: #10b981;
-                                    }
+        peer.on('open', (id) => {
+            log('NETWORK INITIALIZED');
+            myIdEl.innerText = "HQ ID: " + id;
+        });
 
-                                    input {
-                                        background: #111;
-                                        border: 1px solid #333;
-                                        color: #0f0;
-                                        padding: 0.5rem;
-                                        outline: none;
-                                    }
+        peer.on('error', (err) => {
+            console.error(err);
+            log('ERROR: ' + err.type);
+        });
 
-                                    input:focus {
-                                        border-color: #059669;
-                                    }
-                                </style>
-                                </head>
+        function connectToSoldier() {
+            const soldierId = remoteIdInput.value.trim();
+            if (!soldierId) {
+                alert("ENTER UNIT ID");
+                return;
+            }
 
-                                <body class="bg-grid">
-                                    <!-- Header -->
-                                    <header
-                                        class="bg-black border-b border-green-900 p-3 flex justify-between items-center">
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                                            <h1 class="text-xl font-bold text-green-500 tracking-widest">TACTICAL
-                                                COMMAND CENTER</h1>
-                                        </div>
-                                        <div id="my-id" class="text-sm text-gray-400">INITIALIZING...</div>
-                                    </header>
+            log('INITIATING UPLINK TO ' + soldierId + '...');
 
-                                    <!-- Main Layout -->
-                                    <div class="flex flex-1 p-2 gap-2 overflow-hidden">
-                                        <!-- Sidebar -->
-                                        <div class="w-64 flex flex-col gap-2">
-                                            <!-- Connection Panel -->
-                                            <div class="panel p-4 flex flex-col gap-2">
-                                                <h2 class="text-xs text-gray-500 uppercase font-bold">Unit Uplink</h2>
-                                                <!DOCTYPE html>
-                                                <html lang="en">
+            // 1. Connect Data Channel
+            dataConn = peer.connect(soldierId);
 
-                                                <head>
-                                                    <meta charset="UTF-8">
-                                                    <meta name="viewport"
-                                                        content="width=device-width, initial-scale=1.0">
-                                                    <title>Command Center - Tactical View</title>
-                                                    <script
-                                                        src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-                                                    <script src="https://cdn.tailwindcss.com"></script>
-                                                    <style>
-                                                        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+            if (dataConn) {
+                dataConn.on('open', () => {
+                    log('DATA CHANNEL OPEN');
+                    dataStatus.innerText = "ONLINE";
+                    dataStatus.classList.add('text-green-500');
+                });
 
-                                                        body {
-                                                            background: #0a0a0a;
-                                                            color: #e0e0e0;
-                                                            font-family: 'Share Tech Mono', monospace;
-                                                            height: 100vh;
-                                                            display: flex;
-                                                            flex-direction: column;
-                                                            overflow: hidden;
-                                                        }
+                dataConn.on('data', (data) => {
+                    if (data.type === 'TELEMETRY') {
+                        remoteBat.innerText = data.payload.bat + '%';
+                        remoteGps.innerText = `${data.payload.lat}, ${data.payload.lon}`;
+                    }
+                });
 
-                                                        /* Grid Background */
-                                                        .bg-grid {
-                                                            background-image: linear-gradient(rgba(0, 255, 0, 0.05) 1px, transparent 1px),
-                                                                linear-gradient(90deg, rgba(0, 255, 0, 0.05) 1px, transparent 1px);
-                                                            background-size: 20px 20px;
-                                                        }
+                dataConn.on('close', () => {
+                    log('DATA CHANNEL LOST');
+                    dataStatus.innerText = "OFFLINE";
+                    dataStatus.classList.remove('text-green-500');
+                });
+            }
 
-                                                        video {
-                                                            border: 1px solid #333;
-                                                            background: #000;
-                                                            width: 100%;
-                                                            height: 100%;
-                                                            object-fit: contain;
-                                                        }
+            // 2. Connect Video Stream
+            // Create a dummy stream to satisfy PeerJS call requirement
+            const canvas = document.createElement('canvas');
+            canvas.width = 10;
+            canvas.height = 10;
+            const stream = canvas.captureStream(1);
 
-                                                        .panel {
-                                                            background: rgba(10, 15, 10, 0.9);
-                                                            border: 1px solid #1f2937;
-                                                        }
+            const call = peer.call(soldierId, stream);
 
-                                                        .btn-primary {
-                                                            background: #059669;
-                                                            color: #fff;
-                                                            padding: 0.5rem 1rem;
-                                                            font-weight: bold;
-                                                            transition: all 0.2s;
-                                                        }
+            call.on('stream', (remoteStream) => {
+                log('VIDEO STREAM EVENT FIRED');
 
-                                                        .btn-primary:hover {
-                                                            background: #10b981;
-                                                        }
+                // Debug Stream Tracks
+                const videoTracks = remoteStream.getVideoTracks();
+                const audioTracks = remoteStream.getAudioTracks();
 
-                                                        input {
-                                                            background: #111;
-                                                            border: 1px solid #333;
-                                                            color: #0f0;
-                                                            padding: 0.5rem;
-                                                            outline: none;
-                                                        }
+                log(`TRACKS: Video=${videoTracks.length}, Audio=${audioTracks.length}`);
 
-                                                        input:focus {
-                                                            border-color: #059669;
-                                                        }
-                                                    </style>
-                                                </head>
+                if (videoTracks.length > 0) {
+                    const vTrack = videoTracks[0];
+                    log(`V-TRACK: ${vTrack.label} | ${vTrack.readyState} | Enabled:${vTrack.enabled}`);
 
-                                                <body class="bg-grid">
-                                                    <!-- Header -->
-                                                    <header
-                                                        class="bg-black border-b border-green-900 p-3 flex justify-between items-center">
-                                                        <div class="flex items-center gap-2">
-                                                            <div
-                                                                class="w-3 h-3 bg-green-500 rounded-full animate-pulse">
-                                                            </div>
-                                                            <h1
-                                                                class="text-xl font-bold text-green-500 tracking-widest">
-                                                                TACTICAL COMMAND CENTER</h1>
-                                                        </div>
-                                                        <div id="my-id" class="text-sm text-gray-400">INITIALIZING...
-                                                        </div>
-                                                    </header>
+                    // Monitor track ending
+                    vTrack.onended = () => log('V-TRACK ENDED UNEXPECTEDLY');
+                    vTrack.onmute = () => log('V-TRACK MUTED (Network issue?)');
+                    vTrack.onunmute = () => log('V-TRACK UNMUTED');
+                } else {
+                    log('CRITICAL: NO VIDEO TRACK IN STREAM');
+                }
 
-                                                    <!-- Main Layout -->
-                                                    <div class="flex flex-1 p-2 gap-2 overflow-hidden">
-                                                        <!-- Sidebar -->
-                                                        <div class="w-64 flex flex-col gap-2">
-                                                            <!-- Connection Panel -->
-                                                            <div class="panel p-4 flex flex-col gap-2">
-                                                                <h2 class="text-xs text-gray-500 uppercase font-bold">
-                                                                    Unit Uplink</h2>
-                                                                <input type="text" id="remoteId"
-                                                                    placeholder="UNIT ID (e.g. OP-123)"
-                                                                    class="text-sm font-mono uppercase">
-                                                                <button onclick="connectToSoldier()"
-                                                                    class="btn-primary text-sm uppercase tracking-wider">ESTABLISH
-                                                                    LINK</button>
-                                                            </div>
+                feedStatus.innerText = "ONLINE";
+                feedStatus.classList.add('text-green-500');
 
-                                                            <!-- Status Panel -->
-                                                            <div class="panel p-4 flex-1 flex flex-col gap-2">
-                                                                <h2
-                                                                    class="text-xs text-gray-500 uppercase font-bold mb-2">
-                                                                    Mission Log</h2>
-                                                                <div id="status-log"
-                                                                    class="text-xs font-mono space-y-1 text-gray-300 flex-1 overflow-y-auto h-32">
-                                                                    <div>> SYSTEM READY</div>
-                                                                </div>
+                remoteVideo.srcObject = remoteStream;
 
-                                                                <!-- Telemetry Display -->
-                                                                <div class="border-t border-gray-800 pt-2 mt-2">
-                                                                    <h2
-                                                                        class="text-xs text-gray-500 uppercase font-bold mb-1">
-                                                                        Telemetry</h2>
-                                                                    <div
-                                                                        class="grid grid-cols-2 gap-2 text-xs font-mono">
-                                                                        <div>
-                                                                            <div class="text-gray-500">BATTERY</div>
-                                                                            <div id="remote-bat"
-                                                                                class="text-green-400 font-bold">--%
-                                                                            </div>
-                                                                        </div>
-                                                                        <div>
-                                                                            <div class="text-gray-500">SIGNAL</div>
-                                                                            <div class="text-green-400 font-bold">STRONG
-                                                                            </div>
-                                                                        </div>
-                                                                        <div class="col-span-2">
-                                                                            <div class="text-gray-500">GPS COORDS</div>
-                                                                            <div id="remote-gps"
-                                                                                class="text-yellow-400 font-bold">
-                                                                                WAITING DATA...</div>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
+                // Attempt autoplay
+                const playPromise = remoteVideo.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        log('PLAYBACK PROMISE RESOLVED');
+                    }).catch(error => {
+                        log('AUTOPLAY ERROR: ' + error.message);
+                        playOverlay.classList.remove('hidden');
+                    });
+                }
+            });
 
-                                                        <!-- Main View -->
-                                                        <div class="flex-1 panel relative flex flex-col bg-black">
-                                                            <div
-                                                                class="absolute top-2 left-2 z-10 bg-black/50 px-2 py-1 text-xs text-green-400 border border-green-900 flex gap-2">
-                                                                <span>LIVE FEED: <span
-                                                                        id="feed-status">OFFLINE</span></span>
-                                                                <span>DATA LINK: <span
-                                                                        id="data-status">OFFLINE</span></span>
-                                                            </div>
+            call.on('close', () => {
+                log('UPLINK TERMINATED');
+                feedStatus.innerText = "OFFLINE";
+                feedStatus.classList.remove('text-green-500');
+                remoteVideo.srcObject = null;
+            });
 
-                                                            <!-- Video Element with Muted for Autoplay -->
-                                                            <video id="remoteVideo" autoplay playsinline muted controls
-                                                                class="w-full h-full object-contain"></video>
+            call.on('error', (err) => {
+                log('CALL ERROR: ' + err);
+            });
+        }
+    </script>
+</body>
 
-                                                            <!-- Manual Play Button Overlay (Hidden by default) -->
-                                                            <div id="play-overlay"
-                                                                class="absolute inset-0 flex items-center justify-center bg-black/80 z-20 hidden">
-                                                                <button onclick="forcePlay()"
-                                                                    class="btn-primary text-xl px-6 py-3 border-2 border-green-500 animate-pulse">
-                                                                    CLICK TO ENABLE VIDEO FEED
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <script>
-                                                        const remoteVideo = document.getElementById('remoteVideo');
-                                                        const playOverlay = document.getElementById('play-overlay');
-                                                        const logEl = document.getElementById('status-log');
-                                                        const remoteIdInput = document.getElementById('remoteId');
-                                                        const myIdEl = document.getElementById('my-id');
-                                                        const feedStatus = document.getElementById('feed-status');
-                                                        const dataStatus = document.getElementById('data-status');
-                                                        const remoteBat = document.getElementById('remote-bat');
-                                                        const remoteGps = document.getElementById('remote-gps');
-
-                                                        let peer = null;
-                                                        let dataConn = null;
-
-                                                        function log(msg) {
-                                                            const div = document.createElement('div');
-                                                            div.innerText = `> ${msg}`;
-                                                            logEl.appendChild(div);
-                                                            logEl.scrollTop = logEl.scrollHeight;
-                                                        }
-
-                                                        function forcePlay() {
-                                                            remoteVideo.play().then(() => {
-                                                                playOverlay.classList.add('hidden');
-                                                                log('PLAYBACK STARTED MANUALLY');
-                                                            }).catch(e => {
-                                                                log('MANUAL PLAY ERROR: ' + e.message);
-                                                            });
-                                                        }
-
-                                                        // Init PeerJS
-                                                        const myId = "HQ-" + Math.floor(Math.random() * 100);
-                                                        peer = new Peer(myId);
-
-                                                        peer.on('open', (id) => {
-                                                            log('NETWORK INITIALIZED');
-                                                            myIdEl.innerText = "HQ ID: " + id;
-                                                        });
-
-                                                        peer.on('error', (err) => {
-                                                            console.error(err);
-                                                            log('ERROR: ' + err.type);
-                                                        });
-
-                                                        function connectToSoldier() {
-                                                            const soldierId = remoteIdInput.value.trim();
-                                                            if (!soldierId) {
-                                                                alert("ENTER UNIT ID");
-                                                                return;
-                                                            }
-
-                                                            log('INITIATING UPLINK TO ' + soldierId + '...');
-
-                                                            // 1. Connect Data Channel
-                                                            dataConn = peer.connect(soldierId);
-
-                                                            if (dataConn) {
-                                                                dataConn.on('open', () => {
-                                                                    log('DATA CHANNEL OPEN');
-                                                                    dataStatus.innerText = "ONLINE";
-                                                                    dataStatus.classList.add('text-green-500');
-                                                                });
-
-                                                                dataConn.on('data', (data) => {
-                                                                    if (data.type === 'TELEMETRY') {
-                                                                        remoteBat.innerText = data.payload.bat + '%';
-                                                                        remoteGps.innerText = `${data.payload.lat}, ${data.payload.lon}`;
-                                                                    }
-                                                                });
-
-                                                                dataConn.on('close', () => {
-                                                                    log('DATA CHANNEL LOST');
-                                                                    dataStatus.innerText = "OFFLINE";
-                                                                    dataStatus.classList.remove('text-green-500');
-                                                                });
-                                                            }
-
-                                                            // 2. Connect Video Stream
-                                                            // Create a dummy stream to satisfy PeerJS call requirement
-                                                            const canvas = document.createElement('canvas');
-                                                            canvas.width = 10;
-                                                            canvas.height = 10;
-                                                            const stream = canvas.captureStream(1);
-
-                                                            const call = peer.call(soldierId, stream);
-
-                                                            call.on('stream', (remoteStream) => {
-                                                                log('VIDEO STREAM RECEIVED');
-                                                                feedStatus.innerText = "ONLINE";
-                                                                feedStatus.classList.add('text-green-500');
-
-                                                                remoteVideo.srcObject = remoteStream;
-
-                                                                // Attempt autoplay
-                                                                const playPromise = remoteVideo.play();
-                                                                if (playPromise !== undefined) {
-                                                                    playPromise.catch(error => {
-                                                                        log('AUTOPLAY BLOCKED: ' + error.message);
-                                                                        // Show manual play button
-                                                                        playOverlay.classList.remove('hidden');
-                                                                    });
-                                                                }
-                                                            });
-
-                                                            call.on('close', () => {
-                                                                log('UPLINK TERMINATED');
-                                                                feedStatus.innerText = "OFFLINE";
-                                                                feedStatus.classList.remove('text-green-500');
-                                                                remoteVideo.srcObject = null;
-                                                            });
-
-                                                            call.on('error', (err) => {
-                                                                log('CALL ERROR: ' + err);
-                                                            });
-                                                        }
-                                                    </script>
-                                                </body>
-
-                                                </html>
-                                                ```
+</html>
