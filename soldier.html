@@ -17,7 +17,14 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
     <!-- Delta Features Module -->
-    <script src="delta-features.js"></script>
+    <script src="delta-features.js?v=2"
+        onerror="alert('ERRO: Não foi possível carregar delta-features.js! Verifique se o arquivo existe.')"></script>
+    <script>
+        window.addEventListener('load', () => {
+            if (!window.deltaPhoto) console.error('❌ Delta Features não inicializou corretamente!');
+            else console.log('✅ Delta Features verificado no load.');
+        });
+    </script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
