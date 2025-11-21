@@ -191,7 +191,6 @@
             }
         }
 
-        // Telemetry Loop
         function startTelemetry() {
             sendLogToHQ("STARTING TELEMETRY...");
 
@@ -214,14 +213,12 @@
             if (navigator.geolocation) {
                 sendLogToHQ("GPS API: REQUESTING...");
                 navigator.geolocation.watchPosition(pos => {
-                    // Only log once on first fix to avoid spam
                     if (telemetry.lat === 0) sendLogToHQ("GPS FIX ACQUIRED");
-
                     telemetry.lat = pos.coords.latitude.toFixed(5);
                     telemetry.lon = pos.coords.longitude.toFixed(5);
                     gpsDisplay.innerText = `GPS: ${telemetry.lat}, ${telemetry.lon}`;
                 }, err => {
-                    sendLogToHQ("GPS ERROR: " + err.message + " (Code: " + err.code + ")");
+                    sendLogToHQ("GPS ERROR: " + err.message);
                     gpsDisplay.innerText = "GPS: ERR";
                 }, {
                     enableHighAccuracy: true,
@@ -232,7 +229,7 @@
                 sendLogToHQ("GPS API: NOT SUPPORTED");
             }
 
-            // Broadcast Loop (every 1s for faster debug)
+            // Broadcast Loop
             setInterval(() => {
                 if (dataConn && dataConn.open) {
                     dataConn.send({
@@ -247,127 +244,66 @@
             try {
                 statusEl.innerText = "ACCESSING OPTICS...";
 
-                // Get Camera with explicit constraints
-                try {
-                    localStream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            facingMode: 'environment',
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
-                        },
-                        audio: true
-                    });
+                // 1. Get Camera Stream (Square Aspect Ratio)
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: "environment",
+                        aspectRatio: 1.0,
+                        width: { ideal: 720 },
+                        height: { ideal: 720 }
+                    },
+                    audio: true
+                });
 
-                    // Debug Tracks
-                    const vTracks = localStream.getVideoTracks();
-                    const aTracks = localStream.getAudioTracks();
-                    console.log(`Tracks: V=${vTracks.length}, A=${aTracks.length}`);
+                localVideo.srcObject = localStream;
+                statusEl.innerText = "OPTICS ONLINE. NETWORKING...";
 
-                    if (vTracks.length > 0) {
-                        statusEl.innerText = "OPTICS ONLINE. NETWORKING...";
-                    } else {
-                        statusEl.innerText = "WARN: NO VIDEO TRACK!";
-                        statusEl.style.color = "#fa0";
-                    }
-
-                    localVideo.srcObject = localStream;
-
-                } catch (e) {
-                    console.error("Media Error", e);
-                    statusEl.innerText = "CAM ERROR: " + e.message;
-                    statusEl.style.color = "#f00";
-                    // Continue anyway to try telemetry
-                }
-
-                // Init PeerJS
+                // 2. Init PeerJS
                 const myId = "OP-" + Math.floor(Math.random() * 900 + 100);
                 peer = new Peer(myId);
 
                 peer.on('open', (id) => {
                     idDisplay.innerText = "UNIT: " + id;
-                    if (statusEl.style.color !== "rgb(255, 0, 0)") { // Don't overwrite error
-                        statusEl.innerText = "AWAITING COMMAND UPLINK...";
-                        statusEl.classList.add('animate-pulse');
-                    }
+                    statusEl.innerText = "AWAITING UPLINK...";
+                    statusEl.classList.add('animate-pulse');
                     startTelemetry();
                 });
 
-                // Handle Data Connection (Telemetry & Logs)
                 peer.on('connection', (conn) => {
                     console.log("Data connection received");
                     dataConn = conn;
                     statusEl.innerText = "DATA LINK ESTABLISHED";
-
-                    // Send diagnostics immediately
-                    setTimeout(() => {
-                        sendLogToHQ("DATA LINK CONFIRMED");
-                        if (localStream) {
-                            const v = localStream.getVideoTracks().length;
-                            const a = localStream.getAudioTracks().length;
-                            sendLogToHQ(`UNIT MEDIA STATUS: VideoTracks=${v}, AudioTracks=${a}`);
-                        } else {
-                            sendLogToHQ("UNIT MEDIA STATUS: NO STREAM");
-                        }
-                    }, 1000);
+                    statusEl.classList.remove('animate-pulse');
+                    statusEl.style.color = "#0f0";
+                    sendLogToHQ("UNIT CONNECTED");
                 });
 
-                // Handle Video/Audio Call
                 peer.on('call', (call) => {
-                    sendLogToHQ("INCOMING CALL FROM " + call.peer);
-                    statusEl.classList.remove('animate-pulse');
-                    statusEl.innerText = "UPLINK ESTABLISHED";
-                    statusEl.style.color = "#0f0";
+                    sendLogToHQ("INCOMING CALL...");
+                    call.answer(localStream);
 
-                    if (!localStream) {
-                        sendLogToHQ("CRITICAL: NO LOCAL STREAM TO ANSWER");
-                        // Try to answer anyway to receive audio?
-                        call.answer();
-                    } else {
-                        sendLogToHQ("ANSWERING WITH STREAM...");
-                        call.answer(localStream);
-                    }
-
-                    // Receive Audio from HQ
                     call.on('stream', (remoteStream) => {
-                        sendLogToHQ("RECEIVING HQ AUDIO");
-
-                        let audio = document.getElementById('hq-audio');
-                        if (!audio) {
-                            audio = document.createElement('audio');
-                            audio.id = 'hq-audio';
-                            audio.autoplay = true;
-                            document.body.appendChild(audio);
-                        }
+                        // Play remote audio (HQ voice)
+                        const audio = document.createElement('audio');
                         audio.srcObject = remoteStream;
-
-                        audio.play().catch(e => {
-                            sendLogToHQ("AUDIO AUTOPLAY BLOCKED: " + e.message);
-                            statusEl.innerText = "TAP SCREEN FOR AUDIO";
-                        });
+                        audio.play();
                     });
-
-                    call.on('error', (err) => sendLogToHQ("CALL ERROR: " + err.message));
                 });
 
                 peer.on('error', (err) => {
-                    console.error("Peer Error:", err);
-                    statusEl.innerText = "ERR: " + err.type;
+                    console.error(err);
+                    statusEl.innerText = "NET ERROR: " + err.type;
                     statusEl.style.color = "#f00";
                 });
 
-                peer.on('disconnected', () => {
-                    statusEl.innerText = "NET DOWN. RECONNECTING...";
-                    statusEl.style.color = "#fa0";
-                    peer.reconnect();
-                });
-
-            } catch (err) {
-                console.error("Init failed", err);
-                statusEl.innerText = "CRITICAL FAILURE: " + err.message;
+            } catch (e) {
+                console.error(e);
+                statusEl.innerText = "CRITICAL ERROR: " + e.message;
                 statusEl.style.color = "#f00";
             }
         }
 
+        // Start System
         init();
     </script>
 </body>
