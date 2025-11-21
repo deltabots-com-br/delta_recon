@@ -16,16 +16,6 @@
     <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
-    <!-- Delta Features Module -->
-    <script src="delta-features.js?v=2"
-        onerror="alert('ERRO: Não foi possível carregar delta-features.js! Verifique se o arquivo existe.')"></script>
-    <script>
-        window.addEventListener('load', () => {
-            if (!window.deltaPhoto) console.error('❌ Delta Features não inicializou corretamente!');
-            else console.log('✅ Delta Features verificado no load.');
-        });
-    </script>
-
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
@@ -757,6 +747,250 @@
         document.getElementById('gain-slider').addEventListener('input', e => config.gain = parseFloat(e.target.value));
 
         window.onload = bootSequence;
+    </script>
+
+    <!-- DELTA FEATURES EMBEDDED -->
+    <script>
+        // DELTA RECON - MODULO DE FUNCIONALIDADES AVANCADAS (EMBUTIDO)
+        console.log('Delta Features Module carregado (EMBUTIDO)');
+
+        // 1. CAPTURA DE FOTO
+        window.deltaPhoto = {
+            capture: function () {
+                const canvas = document.createElement('canvas');
+                const video = document.getElementById('video');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+
+                const photo = canvas.toDataURL('image/jpeg', 0.9);
+                const timestamp = new Date().toISOString();
+
+                // Salvar localmente
+                const link = document.createElement('a');
+                link.download = `DELTA_${Date.now()}.jpg`;
+                link.href = photo;
+                link.click();
+
+                // Enviar para comando
+                if (window.dataConn && window.dataConn.open) {
+                    window.dataConn.send({
+                        type: 'PHOTO_CAPTURE',
+                        payload: {
+                            image: photo,
+                            timestamp: timestamp,
+                            gps: window.currentGPS || { lat: 0, lon: 0 },
+                            threat: window.currentThreatStatus || 'UNKNOWN'
+                        }
+                    });
+                }
+
+                // Feedback visual
+                deltaUI.showNotification('FOTO CAPTURADA', 'success');
+                deltaAudio.play('camera_shutter');
+                console.log('Foto capturada:', timestamp);
+                return photo;
+            }
+        };
+
+        // 2. CHAT DE TEXTO
+        window.deltaChat = {
+            messages: [],
+            init: function () {
+                if (!document.getElementById('chat-panel')) {
+                    const chatPanel = document.createElement('div');
+                    chatPanel.id = 'chat-panel';
+                    chatPanel.className = 'hidden absolute bottom-20 left-2 right-2 bg-black/90 border border-green-500 p-2 z-40 h-48 flex flex-col';
+                    chatPanel.innerHTML = `
+                        <div id="chat-history" class="flex-1 overflow-y-auto text-[10px] font-mono mb-2 space-y-1"></div>
+                        <div class="flex gap-1">
+                            <input type="text" id="chat-input" class="flex-1 bg-green-900/20 border border-green-700 text-green-400 text-xs p-1 focus:outline-none" placeholder="MSG...">
+                            <button onclick="deltaChat.send()" class="bg-green-600 text-black text-xs px-3 font-bold">SEND</button>
+                        </div>
+                        <div class="flex gap-1 mt-1 overflow-x-auto">
+                            <button onclick="deltaChat.send('CONTACT FRONT')" class="bg-green-900/40 border border-green-700 text-[9px] px-2 py-1 text-green-500 whitespace-nowrap">CONTACT</button>
+                            <button onclick="deltaChat.send('NEED BACKUP')" class="bg-green-900/40 border border-green-700 text-[9px] px-2 py-1 text-green-500 whitespace-nowrap">BACKUP</button>
+                            <button onclick="deltaChat.send('MOVING')" class="bg-green-900/40 border border-green-700 text-[9px] px-2 py-1 text-green-500 whitespace-nowrap">MOVING</button>
+                            <button onclick="deltaChat.send('HOLDING')" class="bg-green-900/40 border border-green-700 text-[9px] px-2 py-1 text-green-500 whitespace-nowrap">HOLDING</button>
+                        </div>
+                    `;
+                    document.getElementById('ui-layer').appendChild(chatPanel);
+                    document.getElementById('chat-input').addEventListener('keypress', function (e) {
+                        if (e.key === 'Enter') deltaChat.send();
+                    });
+                }
+            },
+            toggle: function () {
+                const panel = document.getElementById('chat-panel');
+                if (panel) {
+                    panel.classList.toggle('hidden');
+                    if (!panel.classList.contains('hidden')) {
+                        document.getElementById('chat-input').focus();
+                    }
+                }
+            },
+            send: function (text = null) {
+                const input = document.getElementById('chat-input');
+                const msg = text || input.value;
+                if (!msg) return;
+                this.display('ME', msg, 'text-green-400');
+                if (window.dataConn && window.dataConn.open) {
+                    window.dataConn.send({
+                        type: 'CHAT_MESSAGE',
+                        payload: {
+                            sender: window.myPeerId || 'SOLDIER',
+                            text: msg,
+                            timestamp: new Date().toISOString()
+                        }
+                    });
+                }
+                if (!text) input.value = '';
+                deltaAudio.play('message_sent');
+            },
+            receive: function (sender, text) {
+                this.display(sender, text, 'text-yellow-400');
+                deltaUI.showNotification(`MSG: ${sender}`, 'info');
+                deltaAudio.play('message_received');
+                const panel = document.getElementById('chat-panel');
+                if (panel && panel.classList.contains('hidden')) {
+                    panel.classList.remove('hidden');
+                }
+            },
+            display: function (sender, text, colorClass) {
+                const history = document.getElementById('chat-history');
+                if (!history) return;
+                const line = document.createElement('div');
+                const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                line.innerHTML = `<span class="text-gray-500">[${time}]</span> <span class="font-bold ${colorClass}">${sender}:</span> <span class="text-white">${text}</span>`;
+                history.appendChild(line);
+                history.scrollTop = history.scrollHeight;
+            }
+        };
+
+        // 3. ALERTAS SONOROS
+        window.deltaAudio = {
+            ctx: null,
+            init: function () {
+                try {
+                    window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                } catch (e) { console.log('Web Audio API nao suportada'); }
+            },
+            play: function (type, count = 1) {
+                if (!this.ctx) this.init();
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                const now = this.ctx.currentTime;
+                if (type === 'camera_shutter') {
+                    osc.type = 'square'; osc.frequency.setValueAtTime(800, now); osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+                    gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now); osc.stop(now + 0.1);
+                } else if (type === 'message_received') {
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(1200, now); osc.frequency.setValueAtTime(1800, now + 0.1);
+                    gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                    osc.start(now); osc.stop(now + 0.3);
+                } else if (type === 'message_sent') {
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(600, now);
+                    gain.gain.setValueAtTime(0.05, now); gain.gain.linearRampToValueAtTime(0, now + 0.1);
+                    osc.start(now); osc.stop(now + 0.1);
+                } else if (type === 'threat_detected') {
+                    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, now); osc.frequency.linearRampToValueAtTime(100, now + 0.3);
+                    gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                    osc.start(now); osc.stop(now + 0.3);
+                }
+            }
+        };
+
+        // 4. GRAVACAO DE VIDEO
+        window.deltaRecording = {
+            mediaRecorder: null, chunks: [], isRecording: false,
+            start: function () {
+                const canvas = document.getElementById('outputCanvas');
+                const stream = canvas.captureStream(30);
+                this.chunks = [];
+                try { this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' }); }
+                catch (e) { this.mediaRecorder = new MediaRecorder(stream); }
+                this.mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) this.chunks.push(e.data); };
+                this.mediaRecorder.onstop = () => {
+                    const blob = new Blob(this.chunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url; a.download = `REC_${Date.now()}.webm`; a.click();
+                    deltaUI.showNotification('VIDEO SALVO', 'success');
+                };
+                this.mediaRecorder.start();
+                this.isRecording = true;
+                deltaUI.showNotification('GRAVANDO...', 'warning');
+                const btn = document.getElementById('btn-rec');
+                if (btn) { btn.innerText = 'STOP REC'; btn.classList.add('bg-red-600', 'text-white'); }
+            },
+            stop: function () {
+                if (this.mediaRecorder && this.isRecording) {
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                    const btn = document.getElementById('btn-rec');
+                    if (btn) { btn.innerText = 'START REC'; btn.classList.remove('bg-red-600', 'text-white'); }
+                }
+            }
+        };
+
+        // 5. UI HELPER
+        window.deltaUI = {
+            showNotification: function (text, type = 'info') {
+                const container = document.getElementById('notification-container') || this.createContainer();
+                const notif = document.createElement('div');
+                let color = 'text-green-400 border-green-500';
+                if (type === 'warning') color = 'text-orange-400 border-orange-500';
+                if (type === 'error') color = 'text-red-400 border-red-500';
+                if (type === 'success') color = 'text-cyan-400 border-cyan-500';
+                notif.className = `bg-black/80 border ${color} px-4 py-2 mb-2 text-xs font-bold tracking-wider animate-pulse`;
+                notif.innerText = text;
+                container.appendChild(notif);
+                setTimeout(() => notif.remove(), 3000);
+            },
+            createContainer: function () {
+                const div = document.createElement('div'); div.id = 'notification-container';
+                div.className = 'absolute top-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center pointer-events-none';
+                document.body.appendChild(div);
+                return div;
+            },
+            injectControls: function () {
+                const controls = document.querySelector('.controls');
+                if (!controls) return;
+                const row = document.createElement('div');
+                row.className = 'flex justify-between items-center gap-2 mt-2';
+
+                const btnPhoto = document.createElement('button');
+                btnPhoto.className = 'w-1/3 border border-green-500 bg-green-900/40 text-[10px] py-2 text-green-300 font-bold hover:bg-green-500 hover:text-black transition-all';
+                btnPhoto.innerText = 'CAPTURE PHOTO';
+                btnPhoto.onclick = () => deltaPhoto.capture();
+
+                const btnRec = document.createElement('button');
+                btnRec.id = 'btn-rec';
+                btnRec.className = 'w-1/3 border border-green-500 bg-green-900/40 text-[10px] py-2 text-green-300 font-bold hover:bg-green-500 hover:text-black transition-all';
+                btnRec.innerText = 'START REC';
+                btnRec.onclick = () => { if (deltaRecording.isRecording) deltaRecording.stop(); else deltaRecording.start(); };
+
+                const btnChat = document.createElement('button');
+                btnChat.className = 'w-1/3 border border-green-500 bg-green-900/40 text-[10px] py-2 text-green-300 font-bold hover:bg-green-500 hover:text-black transition-all';
+                btnChat.innerText = 'TOGGLE CHAT';
+                btnChat.onclick = () => deltaChat.toggle();
+
+                row.appendChild(btnPhoto); row.appendChild(btnRec); row.appendChild(btnChat);
+                controls.appendChild(row);
+                deltaChat.init();
+            }
+        };
+
+        // Auto-inicializacao
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                deltaUI.injectControls();
+                console.log('Delta Controls Injected');
+            }, 2000);
+        });
     </script>
 </body>
 
