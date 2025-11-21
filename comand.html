@@ -232,7 +232,7 @@
             });
         }
 
-        function connectToSoldier() {
+        async function connectToSoldier() {
             const soldierId = remoteIdInput.value.trim();
             if (!soldierId) {
                 alert("ENTER UNIT ID");
@@ -272,25 +272,52 @@
                 });
             }
 
-            // 2. Connect Video/Audio Stream
-            log('REQUESTING MICROPHONE ACCESS...');
-            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-                .then((myStream) => {
-                    log('MICROPHONE ACCESS GRANTED');
-                    const call = peer.call(soldierId, myStream);
-                    setupCallEvents(call);
-                })
-                .catch((err) => {
-                    log('MIC ERROR: ' + err.message);
-                    log('FALLING BACK TO VIDEO-ONLY RECEIVER');
+            // 2. Prepare Outgoing Stream (Audio + Dummy Video)
+            // We MUST send a video track (even dummy) so the Soldier can answer with video.
+            log('PREPARING UPLINK STREAM...');
 
-                    // Fallback to dummy stream
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 10; canvas.height = 10;
-                    const stream = canvas.captureStream(1);
-                    const call = peer.call(soldierId, stream);
-                    setupCallEvents(call);
-                });
+            try {
+                // Create Dummy Video (Canvas)
+                const canvas = document.createElement('canvas');
+                canvas.width = 640; canvas.height = 480;
+                const ctx = canvas.getContext('2d');
+
+                // Animate it slightly to ensure track stays active
+                setInterval(() => {
+                    ctx.fillStyle = Math.random() > 0.5 ? '#000' : '#111';
+                    ctx.fillRect(0, 0, 640, 480);
+                    ctx.fillStyle = '#0f0';
+                    ctx.fillText("HQ UPLINK " + Date.now(), 10, 50);
+                }, 1000);
+
+                const canvasStream = canvas.captureStream(15);
+                const videoTrack = canvasStream.getVideoTracks()[0];
+
+                // Get Audio
+                let audioStream;
+                try {
+                    audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    log('MICROPHONE ACCESS GRANTED');
+                } catch (e) {
+                    log('MIC FAILED: ' + e.message);
+                    // Continue without audio
+                }
+
+                // Combine
+                const finalStream = new MediaStream();
+                finalStream.addTrack(videoTrack);
+                if (audioStream) {
+                    audioStream.getAudioTracks().forEach(t => finalStream.addTrack(t));
+                }
+
+                // Call
+                log('SENDING UPLINK SIGNAL...');
+                const call = peer.call(soldierId, finalStream);
+                setupCallEvents(call);
+
+            } catch (err) {
+                log('CRITICAL STREAM ERROR: ' + err.message);
+            }
         }
     </script>
 </body>
