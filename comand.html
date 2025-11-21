@@ -8,7 +8,514 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://u<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DELTA COMMAND OS v2.2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        body {
+            background-color: #050505;
+            color: #0f0;
+            font-family: 'Share Tech Mono', monospace;
+            overflow: hidden;
+        }
+
+        /* Scrollbar Tática */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #001100;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #004400;
+            border: 1px solid #0f0;
+        }
+
+        .panel-border {
+            border: 1px solid #004400;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.05);
+            background: rgba(0, 10, 0, 0.8);
+        }
+
+        .active-tab {
+            background: #003300;
+            border-bottom: 2px solid #0f0;
+            color: #fff;
+        }
+
+        .blink {
+            animation: blinker 1s linear infinite;
+        }
+
+        @keyframes blinker {
+            50% {
+                opacity: 0;
+            }
+        }
+
+        .grid-video {
+            aspect-ratio: 16/9;
+            background: #000;
+            border: 1px solid #333;
+            position: relative;
+        }
+
+        .leaflet-container {
+            background: #000 !important;
+            filter: invert(100%) hue-rotate(180deg) brightness(0.8) contrast(1.2);
+        }
+    </style>
+</head>
+
+<body class="h-screen flex flex-col">
+
+    <!-- HEADER -->
+    <header class="h-12 border-b border-green-900 flex justify-between items-center px-4 bg-black">
+        <div class="flex items-center gap-4">
+            <img src="deltabots.png" class="h-8 filter grayscale brightness-150 sepia hue-rotate-90"
+                onerror="this.style.display='none'">
+            <div>
+                <h1 class="text-xl font-bold tracking-widest text-green-500">COMMAND OS <span
+                        class="text-xs text-green-800">v2.2</span></h1>
+                <div class="text-[10px] text-green-700 tracking-[0.3em]">TACTICAL OPERATIONS CENTER</div>
+            </div>
+        </div>
+        <div class="flex items-center gap-6 text-xs">
+            <div class="text-center">
+                <div class="text-gray-500">UNIT ID</div>
+                <div id="my-id" class="font-bold text-white select-all cursor-pointer" title="Click to Copy">
+                    INITIALIZING...</div>
+            </div>
+            <div class="text-center">
+                <div class="text-gray-500">ACTIVE UNITS</div>
+                <div id="active-count" class="font-bold text-cyan-400">0</div>
+            </div>
+            <div class="text-center">
+                <div class="text-gray-500">SYSTEM TIME</div>
+                <div id="sys-time" class="font-bold text-yellow-500">--:--:--</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <div class="flex-1 flex overflow-hidden">
+
+        <!-- SIDEBAR (ASSETS) -->
+        <aside class="w-64 border-r border-green-900 flex flex-col bg-black/50">
+            <div class="p-2 border-b border-green-900 font-bold text-xs bg-green-900/20">DEPLOYED ASSETS</div>
+            <div id="assets-list" class="flex-1 overflow-y-auto p-2 space-y-2">
+                <!-- Template de Item -->
+                <div id="no-assets" class="text-center text-gray-600 text-xs mt-10">NO SIGNAL DETECTED<br>WAITING FOR
+                    UPLINK...</div>
+            </div>
+
+            <!-- Connection Manual -->
+            <div class="p-2 border-t border-green-900">
+                <div class="text-[10px] text-gray-500 mb-1">MANUAL CONNECTION</div>
+                <div class="flex gap-1">
+                    <input type="text" id="remote-id-input" placeholder="ENTER UNIT ID"
+                        class="w-full bg-black border border-green-700 text-xs p-1 text-green-500 focus:outline-none uppercase">
+                    <button onclick="connectToPeer()"
+                        class="bg-green-800 text-black font-bold text-xs px-2 hover:bg-green-500">CONN</button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- CENTER PANEL -->
+        <main class="flex-1 flex flex-col relative">
+            <!-- Tabs -->
+            <div class="h-8 flex border-b border-green-900 bg-black">
+                <button onclick="switchTab('tactical')" id="tab-tactical"
+                    class="px-4 text-xs font-bold hover:bg-green-900/30 active-tab transition-colors">TACTICAL
+                    MAP</button>
+                <button onclick="switchTab('grid')" id="tab-grid"
+                    class="px-4 text-xs font-bold hover:bg-green-900/30 transition-colors">VIDEO GRID (WAR
+                    ROOM)</button>
+                <button onclick="switchTab('intel')" id="tab-intel"
+                    class="px-4 text-xs font-bold hover:bg-green-900/30 transition-colors">INTEL & LOGS</button>
+            </div>
+
+            <!-- VIEW: TACTICAL -->
+            <div id="view-tactical" class="flex-1 flex relative">
+                <div id="map" class="flex-1 bg-gray-900 z-0"></div>
+
+                <!-- Floating Video (PIP) -->
+                <div id="main-video-container"
+                    class="absolute top-4 right-4 w-80 bg-black border border-green-500 shadow-lg z-[1000] hidden">
+                    <div class="bg-green-900/50 text-[10px] px-2 py-1 flex justify-between">
+                        <span id="pip-label">NO FEED</span>
+                        <button onclick="closePip()" class="text-red-400 hover:text-white">X</button>
+                    </div>
+                    <video id="pip-video" autoplay playsinline class="w-full aspect-video object-cover"></video>
+                    <div class="p-2 grid grid-cols-2 gap-2">
+                        <button onclick="toggleAudio()" id="btn-audio"
+                            class="bg-green-900/30 border border-green-700 text-[10px] py-1 hover:bg-green-500 hover:text-black">UNMUTE</button>
+                        <button onclick="requestPhoto()"
+                            class="bg-green-900/30 border border-green-700 text-[10px] py-1 hover:bg-green-500 hover:text-black">REQ
+                            PHOTO</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: GRID -->
+            <div id="view-grid" class="hidden flex-1 bg-black p-4 overflow-y-auto">
+                <div id="video-grid" class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <!-- Videos injetados aqui -->
+                    <div class="text-gray-600 text-sm col-span-full text-center mt-20">NO VIDEO FEEDS AVAILABLE</div>
+                </div>
+            </div>
+
+            <!-- VIEW: INTEL -->
+            <div id="view-intel" class="hidden flex-1 bg-black p-4 flex gap-4">
+                <div class="w-1/2 flex flex-col">
+                    <h3 class="text-xs font-bold border-b border-green-800 mb-2 pb-1">INTERCEPTED IMAGES</h3>
+                    <div id="intel-gallery" class="flex-1 overflow-y-auto grid grid-cols-2 gap-2 content-start">
+                        <!-- Fotos aqui -->
+                    </div>
+                </div>
+                <div class="w-1/2 flex flex-col">
+                    <h3 class="text-xs font-bold border-b border-green-800 mb-2 pb-1">OPERATION LOGS</h3>
+                    <div id="op-logs"
+                        class="flex-1 overflow-y-auto font-mono text-[10px] space-y-1 bg-green-900/5 p-2 border border-green-900/30">
+                        <!-- Logs aqui -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- RIGHT PANEL (CHAT) -->
+        <aside class="w-72 border-l border-green-900 flex flex-col bg-black/80">
+            <div class="p-2 border-b border-green-900 font-bold text-xs bg-green-900/20">COMMS CHANNEL</div>
+            <div id="chat-history" class="flex-1 overflow-y-auto p-2 space-y-2 text-xs">
+                <!-- Mensagens -->
+            </div>
+            <div class="p-2 border-t border-green-900">
+                <div class="flex gap-1">
+                    <input type="text" id="chat-input"
+                        class="flex-1 bg-black border border-green-700 text-xs p-1 text-white focus:outline-none"
+                        placeholder="BROADCAST MSG...">
+                    <button onclick="sendBroadcast()"
+                        class="bg-green-700 text-black font-bold text-xs px-2 hover:bg-green-500">SEND</button>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script>
+        // --- STATE ---
+        const state = {
+            peers: {}, // { id: { conn, call, type, label } }
+            selectedPeerId: null,
+            logs: [],
+            intel: []
+        };
+
+        // --- INIT ---
+        const myPeerId = "HQ-" + Math.floor(Math.random() * 1000);
+        document.getElementById('my-id').innerText = myPeerId;
+
+        // Clock
+        setInterval(() => {
+            document.getElementById('sys-time').innerText = new Date().toLocaleTimeString();
+        }, 1000);
+
+        // --- AUDIO & MEDIA ---
+        let localStream = null;
+
+        async function initAudio() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                logSystem("HQ AUDIO SYSTEMS ONLINE");
+            } catch (e) {
+                logSystem("HQ AUDIO FAILED: " + e.message);
+                // Cria stream vazio para poder receber video mesmo sem mic
+                const ctx = new AudioContext();
+                const osc = ctx.createOscillator();
+                const dst = ctx.createMediaStreamDestination();
+                osc.connect(dst);
+                localStream = dst.stream;
+            }
+        }
+
+        // Inicializa audio ao carregar (clique na pagina pode ser necessario)
+        document.body.addEventListener('click', () => {
+            if (!localStream) initAudio();
+        }, { once: true });
+
+        // --- PEERJS ---
+        const peer = new Peer(myPeerId);
+
+        peer.on('open', (id) => {
+            logSystem(`HQ ONLINE. ID: ${id}`);
+            document.getElementById('my-id').classList.add('text-green-400');
+        });
+
+        peer.on('connection', (conn) => {
+            handleConnection(conn);
+        });
+
+        peer.on('call', (call) => {
+            // Recebendo chamada (Soldado ligando para HQ)
+            logSystem(`INCOMING CALL FROM: ${call.peer}`);
+            call.answer(localStream); // Responde com nosso audio
+            setupCallEvents(call);
+        });
+
+        function connectToPeer() {
+            const id = document.getElementById('remote-id-input').value.trim();
+            if (!id) return;
+
+            if (!localStream) {
+                logSystem("WAITING FOR AUDIO PERMISSION...");
+                initAudio().then(() => performConnect(id));
+            } else {
+                performConnect(id);
+            }
+        }
+
+        function performConnect(id) {
+            logSystem(`ATTEMPTING CONNECTION TO: ${id}...`);
+
+            // PRE-INITIALIZE PEER STATE
+            if (!state.peers[id]) {
+                state.peers[id] = { id: id, type: 'UNKNOWN', lastSeen: Date.now() };
+                addAssetToSidebar(id);
+            }
+
+            // 1. Data Connection
+            const conn = peer.connect(id);
+            state.peers[id].conn = conn;
+            handleConnection(conn);
+
+            // 2. Media Call
+            logSystem(`CALLING ${id} FOR VIDEO FEED...`);
+            const call = peer.call(id, localStream);
+            state.peers[id].call = call;
+            setupCallEvents(call);
+        }
+
+        function setupCallEvents(call) {
+            call.on('stream', (remoteStream) => {
+                logSystem(`VIDEO FEED RECEIVED: ${call.peer}`);
+
+                if (!state.peers[call.peer]) {
+                    state.peers[call.peer] = { id: call.peer, type: 'UNKNOWN', lastSeen: Date.now() };
+                    addAssetToSidebar(call.peer);
+                }
+
+                state.peers[call.peer].call = call;
+                state.peers[call.peer].stream = remoteStream;
+
+                if (state.selectedPeerId === call.peer) {
+                    showPip(call.peer);
+                }
+
+                addToGrid(call.peer, remoteStream);
+            });
+
+            call.on('error', (err) => {
+                logSystem(`CALL ERROR: ${err}`);
+            });
+        }
+
+        function handleConnection(conn) {
+            conn.on('open', () => {
+                logSystem(`CONNECTION ESTABLISHED: ${conn.peer}`);
+                if (!state.peers[conn.peer]) {
+                    state.peers[conn.peer] = { id: conn.peer, type: 'UNKNOWN', lastSeen: Date.now() };
+                    addAssetToSidebar(conn.peer);
+                }
+                state.peers[conn.peer].conn = conn;
+                updateActiveCount();
+            });
+
+            conn.on('data', (data) => {
+                handleData(conn.peer, data);
+            });
+
+            conn.on('close', () => {
+                logSystem(`LOST CONNECTION: ${conn.peer}`);
+                removeAsset(conn.peer);
+            });
+        }
+
+        function handleData(peerId, data) {
+            const peerData = state.peers[peerId];
+
+            if (data.type === 'TELEMETRY') {
+                // Atualiza info do asset
+                updateAssetInfo(peerId, data.payload);
+                // Atualiza mapa
+                updateMapMarker(peerId, data.payload.gps);
+            }
+            else if (data.type === 'CHAT_MESSAGE') {
+                addChatMessage(data.payload.sender, data.payload.text);
+            }
+            else if (data.type === 'PHOTO_CAPTURE') {
+                addIntelPhoto(peerId, data.payload);
+            }
+            else if (data.type === 'INTEL_DATA') {
+                logSystem(`OCR DATA FROM ${peerId}: ${data.payload.text}`);
+            }
+        }
+
+        // --- UI LOGIC ---
+
+        function addAssetToSidebar(id) {
+            document.getElementById('no-assets').style.display = 'none';
+            const list = document.getElementById('assets-list');
+
+            const el = document.createElement('div');
+            el.id = `asset-${id}`;
+            el.className = "panel-border p-2 cursor-pointer hover:bg-green-900/20 transition-colors";
+            el.onclick = () => selectAsset(id);
+            el.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <span class="font-bold text-green-400">${id}</span>
+                    <span class="text-[9px] bg-green-900 px-1 rounded text-white status-badge">CONN</span>
+                </div>
+                <div class="text-[10px] text-gray-400 mt-1 flex justify-between">
+                    <span class="asset-type">SOLDIER</span>
+                    <span class="asset-bat">BAT: --%</span>
+                </div>
+                <div class="text-[10px] text-red-500 font-bold hidden threat-alert blink">THREAT DETECTED</div>
+            `;
+            list.appendChild(el);
+        }
+
+        function updateAssetInfo(id, payload) {
+            const el = document.getElementById(`asset-${id}`);
+            if (!el) return;
+
+            el.querySelector('.asset-bat').innerText = `BAT: ${payload.battery || '--%'}`;
+            if (markers[id]) {
+                markers[id].setLatLng([gps.lat, gps.lon]);
+            } else {
+                const icon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div style='background-color:#0f0;width:10px;height:10px;border-radius:50%;box-shadow:0 0 5px #0f0;'></div>`,
+                    iconSize: [10, 10],
+                    iconAnchor: [5, 5]
+                });
+                markers[id] = L.marker([gps.lat, gps.lon], { icon: icon }).addTo(map).bindPopup(id);
+            }
+        }
+
+        // --- CHAT & LOGS ---
+        function logSystem(msg) {
+            const time = new Date().toLocaleTimeString();
+            const line = `[${time}] ${msg}`;
+            state.logs.push(line);
+
+            const container = document.getElementById('op-logs');
+            const div = document.createElement('div');
+            div.innerText = line;
+            container.prepend(div); // Mais recente no topo
+        }
+
+        function addChatMessage(sender, text) {
+            const container = document.getElementById('chat-history');
+            const div = document.createElement('div');
+            div.className = "mb-1 border-l-2 border-green-700 pl-2";
+            div.innerHTML = `<span class="font-bold text-green-400">${sender}:</span> <span class="text-gray-300">${text}</span>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function sendBroadcast() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            addChatMessage('HQ', text);
+
+            // Enviar para todos
+            Object.values(state.peers).forEach(p => {
+                if (p.conn && p.conn.open) {
+                    p.conn.send({
+                        type: 'CHAT_MESSAGE',
+                        payload: { sender: 'HQ', text: text, timestamp: new Date().toISOString() }
+                    });
+                }
+            });
+
+            input.value = '';
+        }
+
+        document.getElementById('chat-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendBroadcast();
+        });
+
+        // --- INTEL ---
+        function addIntelPhoto(id, payload) {
+            const container = document.getElementById('intel-gallery');
+            const div = document.createElement('div');
+            div.className = "border border-green-800 bg-green-900/10 p-1";
+            div.innerHTML = `
+                <img src="${payload.image}" class="w-full h-32 object-cover cursor-pointer hover:opacity-80" onclick="window.open(this.src)">
+                <div class="text-[8px] mt-1 text-gray-400 flex justify-between">
+                    <span>${id}</span>
+                    <span>${new Date(payload.timestamp).toLocaleTimeString()}</span>
+                </div>
+                <div class="text-[8px] text-red-400 font-bold">${payload.threat}</div>
+            `;
+            container.prepend(div);
+            logSystem(`INTEL RECEIVED FROM ${id}`);
+
+            // Se estiver na aba intel, avisa
+            if (!document.getElementById('tab-intel').classList.contains('active-tab')) {
+                document.getElementById('tab-intel').classList.add('text-yellow-400', 'blink');
+            }
+        }
+
+        function requestPhoto() {
+            if (state.selectedPeerId && state.peers[state.selectedPeerId].conn) {
+                // Nota: O soldado precisa implementar o handler para 'REQUEST_PHOTO'
+                // Por enquanto, mandamos msg de chat pedindo
+                state.peers[state.selectedPeerId].conn.send({
+                    type: 'CHAT_MESSAGE',
+                    payload: { sender: 'HQ', text: 'REQUESTING SITREP PHOTO', timestamp: new Date().toISOString() }
+                });
+                logSystem(`PHOTO REQUESTED FROM ${state.selectedPeerId}`);
+            }
+        }
+
+        // --- TABS ---
+        function switchTab(tab) {
+            ['tactical', 'grid', 'intel'].forEach(t => {
+                document.getElementById(`view-${t}`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).classList.remove('active-tab');
+            });
+
+            document.getElementById(`view-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).classList.add('active-tab');
+
+            if (tab === 'tactical') map.invalidateSize();
+            if (tab === 'intel') document.getElementById('tab-intel').classList.remove('text-yellow-400', 'blink');
+        }
+
+        function updateActiveCount() {
+            document.getElementById('active-count').innerText = Object.keys(state.peers).length;
+        }
+
+    </script>
+</body>
+
+</html>npkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
@@ -609,3 +1116,4 @@
 </body>
 
 </html>
+
