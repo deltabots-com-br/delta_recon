@@ -108,6 +108,116 @@
         }
     </style>
 </head>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Soldier Unit - HUD v2</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        body {
+            background: #000;
+            color: #0f0;
+            font-family: 'Share Tech Mono', monospace;
+            overflow: hidden;
+        }
+
+        video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        #ui-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .hud-text {
+            text-shadow: 0 0 5px #0f0;
+        }
+
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            border: 1px solid rgba(0, 255, 0, 0.5);
+        }
+
+        .crosshair::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 4px;
+            height: 4px;
+            background: #0f0;
+        }
+
+        .corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-color: #0f0;
+            border-style: solid;
+        }
+
+        .tl {
+            top: 10px;
+            left: 10px;
+            border-width: 2px 0 0 2px;
+        }
+
+        .tr {
+            top: 10px;
+            right: 10px;
+            border-width: 2px 2px 0 0;
+        }
+
+        .bl {
+            bottom: 10px;
+            left: 10px;
+            border-width: 0 0 2px 2px;
+        }
+
+        .br {
+            bottom: 10px;
+            right: 10px;
+            border-width: 0 2px 2px 0;
+        }
+
+        /* Scanline effect */
+        .scanline {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0) 50%, rgba(0, 0, 0, 0.2) 50%, rgba(0, 0, 0, 0.2));
+            background-size: 100% 4px;
+        }
+    </style>
+</head>
 
 <body>
     <!-- Video Background -->
@@ -126,6 +236,12 @@
                 <div id="clock" class="text-lg font-bold">00:00:00</div>
                 <div class="text-xs text-red-500 font-bold animate-pulse">● REC</div>
             </div>
+        </div>
+
+        <!-- Telemetry Data (New) -->
+        <div class="absolute top-20 left-4 space-y-1 text-xs font-mono">
+            <div id="bat-display" class="text-green-400">BAT: --%</div>
+            <div id="gps-display" class="text-green-400">GPS: ACQUIRING...</div>
         </div>
 
         <!-- Center Crosshair -->
@@ -154,14 +270,61 @@
         const statusEl = document.getElementById('status');
         const idDisplay = document.getElementById('id-display');
         const clockEl = document.getElementById('clock');
+        const batDisplay = document.getElementById('bat-display');
+        const gpsDisplay = document.getElementById('gps-display');
+
         let localStream = null;
         let peer = null;
+        let dataConn = null;
+
+        // Telemetry State
+        let telemetry = {
+            bat: 100,
+            lat: 0,
+            lon: 0
+        };
 
         // Clock Update
         setInterval(() => {
             const now = new Date();
             clockEl.innerText = now.toLocaleTimeString('en-US', { hour12: false });
         }, 1000);
+
+        // Telemetry Loop
+        function startTelemetry() {
+            // Battery
+            if (navigator.getBattery) {
+                navigator.getBattery().then(bat => {
+                    const updateBat = () => {
+                        telemetry.bat = Math.round(bat.level * 100);
+                        batDisplay.innerText = `BAT: ${telemetry.bat}%`;
+                    };
+                    updateBat();
+                    bat.addEventListener('levelchange', updateBat);
+                });
+            }
+
+            // GPS
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition(pos => {
+                    telemetry.lat = pos.coords.latitude.toFixed(5);
+                    telemetry.lon = pos.coords.longitude.toFixed(5);
+                    gpsDisplay.innerText = `GPS: ${telemetry.lat}, ${telemetry.lon}`;
+                }, err => {
+                    gpsDisplay.innerText = "GPS: ERR";
+                });
+            }
+
+            // Broadcast Loop (every 2s)
+            setInterval(() => {
+                if (dataConn && dataConn.open) {
+                    dataConn.send({
+                        type: 'TELEMETRY',
+                        payload: telemetry
+                    });
+                }
+            }, 2000);
+        }
 
         async function init() {
             try {
@@ -181,8 +344,17 @@
                     idDisplay.innerText = "UNIT: " + id;
                     statusEl.innerText = "AWAITING COMMAND UPLINK...";
                     statusEl.classList.add('animate-pulse');
+                    startTelemetry();
                 });
 
+                // Handle Data Connection (Telemetry)
+                peer.on('connection', (conn) => {
+                    console.log("Data connection received");
+                    dataConn = conn;
+                    statusEl.innerText = "DATA LINK ESTABLISHED";
+                });
+
+                // Handle Video Call
                 peer.on('call', (call) => {
                     statusEl.classList.remove('animate-pulse');
                     statusEl.innerText = "UPLINK ESTABLISHED: " + call.peer;
