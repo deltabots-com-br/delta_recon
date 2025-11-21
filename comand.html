@@ -246,22 +246,6 @@
 
             if (dataConn) {
                 dataConn.on('open', () => {
-                    log('DATA CHANNEL OPEN');
-                    dataStatus.innerText = "ONLINE";
-                    dataStatus.classList.add('text-green-500');
-                });
-
-                dataConn.on('data', (data) => {
-                    if (data.type === 'TELEMETRY') {
-                        remoteBat.innerText = data.payload.bat + '%';
-                        remoteGps.innerText = `${data.payload.lat}, ${data.payload.lon}`;
-                    }
-                });
-
-                dataConn.on('close', () => {
-                    log('DATA CHANNEL LOST');
-                    dataStatus.innerText = "OFFLINE";
-                    dataStatus.classList.remove('text-green-500');
                 });
             }
 
