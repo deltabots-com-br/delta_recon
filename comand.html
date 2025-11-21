@@ -30,25 +30,41 @@
             background-size: 20px 20px;
         }
 
-        .video-wrapper {
+        /* Video Wrapper - Enforce Square Aspect Ratio */
+        .video-container {
             flex: 1;
             display: flex;
             justify-content: center;
             align-items: center;
-            position: relative;
             background: #000;
             overflow: hidden;
+            position: relative;
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 80vh;
+            /* Limit size to fit screen height */
+            aspect-ratio: 1 / 1;
+            background: #000;
+            border: 1px solid #333;
         }
 
         video {
             width: 100%;
-            max-width: 100%;
-            /* Force Square Aspect Ratio */
-            aspect-ratio: 1 / 1;
-            object-fit: cover;
-            /* Night Vision Filter */
+            height: 100%;
+            object-fit: contain;
+            /* Ensure we see the full square feed */
+        }
+
+        /* Filters */
+        .filter-night {
             filter: sepia(100%) hue-rotate(90deg) saturate(300%) contrast(1.2) brightness(1.1);
-            box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.8);
+        }
+
+        .filter-thermal {
+            filter: grayscale(100%) contrast(150%) invert(100%) brightness(1.2);
         }
 
         .scanlines {
@@ -80,6 +96,20 @@
             background: #10b981;
         }
 
+        .btn-secondary {
+            background: #1f2937;
+            color: #9ca3af;
+            border: 1px solid #374151;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover,
+        .btn-secondary.active {
+            background: #059669;
+            color: #fff;
+            border-color: #059669;
+        }
+
         input {
             background: #111;
             border: 1px solid #333;
@@ -100,12 +130,10 @@
             border: 1px solid #333;
         }
 
-        /* Custom Dark Map Tiles Filter */
         .leaflet-tile {
             filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
         }
 
-        /* Log Panel Styling */
         .log-panel {
             height: 150px;
             border-top: 1px solid #1f2937;
@@ -141,7 +169,7 @@
                     LINK</button>
             </div>
 
-            <!-- Telemetry & Map Panel (Expanded) -->
+            <!-- Telemetry & Map Panel -->
             <div class="panel p-4 flex-1 flex flex-col gap-2">
                 <h2 class="text-xs text-gray-500 uppercase font-bold mb-1">Telemetry</h2>
                 <div class="grid grid-cols-2 gap-2 text-xs font-mono">
@@ -174,25 +202,34 @@
                 <span>DATA LINK: <span id="data-status">OFFLINE</span></span>
             </div>
 
-            <!-- Video Wrapper -->
-            <div class="video-wrapper">
-                <!-- Scanlines Overlay -->
-                <div class="scanlines"></div>
+            <!-- Video Container -->
+            <div class="video-container">
+                <div class="video-wrapper">
+                    <div class="scanlines"></div>
+                    <video id="remoteVideo" autoplay playsinline muted controls></video>
 
-                <!-- Video Element -->
-                <video id="remoteVideo" autoplay playsinline muted controls></video>
-
-                <!-- Manual Play Button Overlay (Hidden by default) -->
-                <div id="play-overlay"
-                    class="absolute inset-0 flex items-center justify-center bg-black/80 z-20 hidden">
-                    <button onclick="forcePlay()"
-                        class="btn-primary text-xl px-6 py-3 border-2 border-green-500 animate-pulse">
-                        CLICK TO ENABLE VIDEO FEED
-                    </button>
+                    <!-- Manual Play Button -->
+                    <div id="play-overlay"
+                        class="absolute inset-0 flex items-center justify-center bg-black/80 z-20 hidden">
+                        <button onclick="forcePlay()"
+                            class="btn-primary text-xl px-6 py-3 border-2 border-green-500 animate-pulse">
+                            CLICK TO ENABLE VIDEO FEED
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <!-- Mission Log (Moved to Bottom) -->
+            <!-- Video Controls -->
+            <div class="flex justify-center gap-2 p-2 border-t border-green-900 bg-black/50">
+                <button onclick="setFilter('normal')" id="btn-normal"
+                    class="btn-secondary text-xs px-3 py-1 active">NORMAL</button>
+                <button onclick="setFilter('night')" id="btn-night" class="btn-secondary text-xs px-3 py-1">NIGHT
+                    VISION</button>
+                <button onclick="setFilter('thermal')" id="btn-thermal"
+                    class="btn-secondary text-xs px-3 py-1">THERMAL</button>
+            </div>
+
+            <!-- Mission Log -->
             <div class="log-panel flex flex-col">
                 <div class="text-green-500 font-bold mb-1 sticky top-0 bg-black/90 p-1 border-b border-green-900">>>
                     MISSION LOG</div>
@@ -221,7 +258,6 @@
 
         // Init Map
         function initMap() {
-            // Default to a neutral location or wait for GPS
             map = L.map('map').setView([0, 0], 2);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors'
@@ -237,7 +273,7 @@
                 map.setView(pos, 15);
             } else {
                 marker.setLatLng(pos);
-                map.setView(pos); // Keep centered
+                map.setView(pos);
             }
         }
 
@@ -245,7 +281,6 @@
             const div = document.createElement('div');
             div.innerText = `> ${msg}`;
             logEl.appendChild(div);
-            // Scroll the parent container
             logEl.parentElement.scrollTop = logEl.parentElement.scrollHeight;
         }
 
@@ -256,6 +291,21 @@
             }).catch(e => {
                 log('MANUAL PLAY ERROR: ' + e.message);
             });
+        }
+
+        function setFilter(type) {
+            // Reset classes
+            remoteVideo.className = '';
+
+            // Update Buttons
+            document.querySelectorAll('.btn-secondary').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-' + type).classList.add('active');
+
+            if (type === 'night') {
+                remoteVideo.classList.add('filter-night');
+            } else if (type === 'thermal') {
+                remoteVideo.classList.add('filter-thermal');
+            }
         }
 
         // Init PeerJS
@@ -293,10 +343,7 @@
                 if (data.type === 'LOG') {
                     log(data.payload);
                 } else if (data.type === 'TELEMETRY') {
-                    // Update Battery
                     remoteBat.innerText = data.payload.bat + '%';
-
-                    // Update GPS
                     if (data.payload.lat !== 0) {
                         remoteGps.innerText = `${data.payload.lat}, ${data.payload.lon}`;
                         updateMap(data.payload.lat, data.payload.lon);
@@ -310,22 +357,18 @@
                 dataStatus.classList.remove('text-green-500');
             });
 
-            // 2. Call for Video (Send Dummy Stream to trigger answer)
-            // Create a dummy canvas stream so we have something to offer
+            // 2. Call for Video (Send Dummy Silent Stream)
             const canvas = document.createElement('canvas');
             canvas.width = 640;
             canvas.height = 480;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = 'green';
+            ctx.fillStyle = 'black';
             ctx.fillRect(0, 0, 640, 480);
             const stream = canvas.captureStream(10);
 
-            // Add a dummy audio track too
+            // Add a silent audio track
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = audioCtx.createOscillator();
             const dst = audioCtx.createMediaStreamDestination();
-            osc.connect(dst);
-            osc.start();
             const audioTrack = dst.stream.getAudioTracks()[0];
             stream.addTrack(audioTrack);
 
@@ -337,39 +380,14 @@
         function setupCallEvents(call) {
             call.on('stream', (remoteStream) => {
                 log('VIDEO STREAM EVENT FIRED');
-
-                // Debug Stream Tracks
-                const videoTracks = remoteStream.getVideoTracks();
-                const audioTracks = remoteStream.getAudioTracks();
-
-                log(`TRACKS: Video=${videoTracks.length}, Audio=${audioTracks.length}`);
-
-                if (videoTracks.length > 0) {
-                    const vTrack = videoTracks[0];
-                    log(`V-TRACK: ${vTrack.label} | ${vTrack.readyState} | Enabled:${vTrack.enabled}`);
-
-                    vTrack.onended = () => log('V-TRACK ENDED UNEXPECTEDLY');
-                    vTrack.onmute = () => log('V-TRACK MUTED (Network issue?)');
-                    vTrack.onunmute = () => log('V-TRACK UNMUTED');
-                } else {
-                    log('CRITICAL: NO VIDEO TRACK IN STREAM');
-                }
-
                 feedStatus.innerText = "ONLINE";
                 feedStatus.classList.add('text-green-500');
-
                 remoteVideo.srcObject = remoteStream;
 
-                // Attempt autoplay
-                const playPromise = remoteVideo.play();
-                if (playPromise !== undefined) {
-                    playPromise.then(() => {
-                        log('PLAYBACK PROMISE RESOLVED');
-                    }).catch(error => {
-                        log('AUTOPLAY ERROR: ' + error.message);
-                        playOverlay.classList.remove('hidden');
-                    });
-                }
+                remoteVideo.play().catch(e => {
+                    log('AUTOPLAY BLOCKED: ' + e.message);
+                    playOverlay.classList.remove('hidden');
+                });
             });
 
             call.on('close', () => {
@@ -378,16 +396,10 @@
                 feedStatus.classList.remove('text-green-500');
                 remoteVideo.srcObject = null;
             });
-
-            call.on('error', (err) => {
-                log('CALL ERROR: ' + err);
-            });
         }
 
-        // Handle incoming calls (if Soldier calls HQ back)
         peer.on('call', (call) => {
             log('INCOMING CALL FROM UNIT');
-            // Answer with dummy stream
             const canvas = document.createElement('canvas');
             canvas.width = 640;
             canvas.height = 480;
