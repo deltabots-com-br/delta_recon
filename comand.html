@@ -5,13 +5,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Command Center - Tactical View</title>
-    <!-- Leaflet Map -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
         body {
             background: #0a0a0a;
@@ -23,48 +28,11 @@
             overflow: hidden;
         }
 
-        /* Grid Background */
         .bg-grid {
-            background-image: linear-gradient(rgba(0, 255, 0, 0.05) 1px, transparent 1px),
+            background-image:
+                linear-gradient(rgba(0, 255, 0, 0.05) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(0, 255, 0, 0.05) 1px, transparent 1px);
             background-size: 20px 20px;
-        }
-
-        /* Video Wrapper - Enforce Square Aspect Ratio */
-        .video-container {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: #000;
-            overflow: hidden;
-            position: relative;
-            min-height: 0;
-        }
-
-        .video-wrapper {
-            position: relative;
-            height: 98%;
-            aspect-ratio: 1 / 1;
-            max-width: 100%;
-            background: #000;
-            border: 1px solid #333;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
-        }
-
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        /* Filters */
-        .filter-night {
-            filter: sepia(100%) hue-rotate(90deg) saturate(300%) contrast(1.2) brightness(1.1);
-        }
-
-        .filter-thermal {
-            filter: grayscale(100%) contrast(150%) invert(100%) brightness(1.2);
         }
 
         .scanlines {
@@ -73,10 +41,15 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0) 50%, rgba(0, 0, 0, 0.2) 50%, rgba(0, 0, 0, 0.2));
+            background: linear-gradient(to bottom,
+                    rgba(255, 255, 255, 0) 0%,
+                    rgba(255, 255, 255, 0) 50%,
+                    rgba(0, 0, 0, 0.25) 50%,
+                    rgba(0, 0, 0, 0.25) 100%);
             background-size: 100% 4px;
             pointer-events: none;
-            z-index: 10;
+            z-index: 5;
+            opacity: 0.5;
         }
 
         .panel {
@@ -89,6 +62,8 @@
             color: #fff;
             padding: 0.5rem 1rem;
             font-weight: bold;
+            border: none;
+            cursor: pointer;
             transition: all 0.2s;
         }
 
@@ -100,6 +75,8 @@
             background: #1f2937;
             color: #9ca3af;
             border: 1px solid #374151;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
             transition: all 0.2s;
         }
 
@@ -122,6 +99,16 @@
             border-color: #059669;
         }
 
+        /* Video Filters */
+        .filter-night {
+            filter: sepia(100%) hue-rotate(90deg) saturate(300%) contrast(1.2) brightness(1.1);
+        }
+
+        .filter-thermal {
+            filter: grayscale(100%) contrast(150%) invert(100%) brightness(1.2);
+        }
+
+        /* Map Styling */
         #map {
             height: 100%;
             min-height: 200px;
@@ -134,14 +121,22 @@
             filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
         }
 
-        .log-panel {
-            height: 150px;
-            border-top: 1px solid #1f2937;
-            background: rgba(0, 0, 0, 0.95);
-            padding: 0.5rem;
-            font-size: 0.75rem;
-            overflow-y: auto;
-            font-family: 'Share Tech Mono', monospace;
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #111;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #059669;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #10b981;
         }
     </style>
 </head>
@@ -156,203 +151,305 @@
         <div id="my-id" class="text-sm text-gray-400">INITIALIZING...</div>
     </header>
 
-    <!-- Main Layout -->
-    <div class="flex flex-1 p-2 gap-2 overflow-hidden">
-        <!-- Sidebar -->
+    <!-- Main Layout: 3 Column Design -->
+    <div class="flex flex-1 gap-2 p-2 overflow-hidden">
+
+        <!-- LEFT SIDEBAR: Connection & Telemetry -->
         <div class="w-80 flex flex-col gap-2">
             <!-- Connection Panel -->
             <div class="panel p-4 flex flex-col gap-2">
-                <h2 class="text-xs text-gray-500 uppercase font-bold">Unit Uplink</h2>
+                <h2 class="text-xs text-gray-500 uppercase font-bold border-b border-green-900/30 pb-2">Unit Uplink</h2>
                 <input type="text" id="remoteId" placeholder="UNIT ID (e.g. OP-123)"
                     class="text-sm font-mono uppercase">
-                <button onclick="connectToSoldier()" class="btn-primary text-sm uppercase tracking-wider">ESTABLISH
-                    LINK</button>
+                <button onclick="connectToSoldier()" class="btn-primary text-sm uppercase tracking-wider">
+                    ESTABLISH LINK
+                </button>
             </div>
 
             <!-- Telemetry & Map Panel -->
-            <div class="panel p-4 flex-1 flex flex-col gap-2">
-                <h2 class="text-xs text-gray-500 uppercase font-bold mb-1">Telemetry</h2>
-                <div class="grid grid-cols-2 gap-2 text-xs font-mono">
-                    <div>
-                        <div class="text-gray-500">BATTERY</div>
-                        <div id="remote-bat" class="text-green-400 font-bold text-xl">--%</div>
+            <div class="panel p-4 flex-1 flex flex-col gap-3 min-h-0">
+                <h2 class="text-xs text-gray-500 uppercase font-bold border-b border-green-900/30 pb-2">Telemetry</h2>
+
+                <div class="grid grid-cols-2 gap-3 text-xs font-mono">
+                    <div class="bg-black/50 p-2 border border-green-900/30">
+                        <div class="text-gray-500 text-xs">BATTERY</div>
+                        <div id="remote-bat" class="text-green-400 font-bold text-2xl">--%</div>
                     </div>
-                    <div>
-                        <div class="text-gray-500">SIGNAL</div>
-                        <div class="text-green-400 font-bold text-xl">STRONG</div>
+                    <div class="bg-black/50 p-2 border border-green-900/30">
+                        <div class="text-gray-500 text-xs">SIGNAL</div>
+                        <div class="text-green-400 font-bold text-lg">STRONG</div>
                     </div>
-                    <div class="col-span-2">
-                        <div class="text-gray-500">GPS COORDS</div>
-                        <div id="remote-gps" class="text-yellow-400 font-bold">WAITING DATA...</div>
+                    <div class="col-span-2 bg-black/50 p-2 border border-green-900/30">
+                        <div class="text-gray-500 text-xs">GPS COORDS</div>
+                        <div id="remote-gps" class="text-yellow-400 font-bold text-xs">WAITING DATA...</div>
                     </div>
                 </div>
 
                 <!-- Map Container -->
-                const logEl = document.getElementById('status-log');
-                const remoteIdInput = document.getElementById('remoteId');
-                const myIdEl = document.getElementById('my-id');
-                const feedStatus = document.getElementById('feed-status');
-                const dataStatus = document.getElementById('data-status');
-                const remoteBat = document.getElementById('remote-bat');
-                const remoteGps = document.getElementById('remote-gps');
+                <div class="flex-1 border border-gray-800 min-h-0">
+                    <div id="map" class="w-full h-full"></div>
+                </div>
+            </div>
+        </div>
 
-                let peer = null;
-                let dataConn = null;
-                let map = null;
-                let marker = null;
+        <!-- CENTER: Video Feed -->
+        <div class="flex-1 panel flex flex-col bg-black relative min-w-0">
+            <!-- Status Badge -->
+            <div
+                class="absolute top-3 left-3 z-20 bg-black/80 px-3 py-2 text-xs text-green-400 border border-green-900 flex gap-4 rounded">
+                <span>LIVE FEED: <span id="feed-status" class="font-bold">OFFLINE</span></span>
+                <span>DATA LINK: <span id="data-status" class="font-bold">OFFLINE</span></span>
+            </div>
 
-                // Init Map
-                function initMap() {
-                map = L.map('map').setView([0, 0], 2);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            <!-- Video Container -->
+            <div class="flex-1 flex items-center justify-center p-4 relative">
+                <!-- Square Video Wrapper -->
+                <div class="relative aspect-square h-full max-w-full border-2 border-green-900/20 shadow-2xl">
+                    <div class="scanlines"></div>
+                    <video id="remoteVideo" autoplay playsinline muted
+                        class="w-full h-full object-cover bg-black"></video>
+
+                    <!-- Manual Play Overlay -->
+                    <div id="play-overlay"
+                        class="absolute inset-0 flex items-center justify-center bg-black/90 z-30 hidden">
+                        <button onclick="forcePlay()"
+                            class="btn-primary text-xl px-8 py-4 border-2 border-green-500 animate-pulse uppercase">
+                            ▶ ENABLE VIDEO FEED
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Video Controls Bar -->
+            <div class="border-t border-green-900 bg-black/70 p-3 flex justify-center gap-3">
+                <button onclick="setFilter('normal')" id="btn-normal"
+                    class="btn-secondary text-xs px-4 py-2 active uppercase">
+                    NORMAL
+                </button>
+                <button onclick="setFilter('night')" id="btn-night" class="btn-secondary text-xs px-4 py-2 uppercase">
+                    NIGHT VISION
+                </button>
+                <button onclick="setFilter('thermal')" id="btn-thermal"
+                    class="btn-secondary text-xs px-4 py-2 uppercase">
+                    THERMAL
+                </button>
+            </div>
+        </div>
+
+        <!-- RIGHT SIDEBAR: Mission Log -->
+        <div class="w-80 panel flex flex-col min-h-0">
+            <div class="bg-green-900/20 px-4 py-3 border-b border-green-900">
+                <h2 class="text-green-500 font-bold text-sm tracking-widest">>> MISSION LOG</h2>
+            </div>
+            <div id="status-log" class="flex-1 p-3 overflow-y-auto text-xs space-y-1 font-mono text-gray-400">
+                <div class="text-green-500">> SYSTEM READY</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // GLOBAL VARIABLES
+        // ========================================
+        const remoteVideo = document.getElementById('remoteVideo');
+        const playOverlay = document.getElementById('play-overlay');
+        const logEl = document.getElementById('status-log');
+        const remoteIdInput = document.getElementById('remoteId');
+        const myIdEl = document.getElementById('my-id');
+        const feedStatus = document.getElementById('feed-status');
+        const dataStatus = document.getElementById('data-status');
+        const remoteBat = document.getElementById('remote-bat');
+        const remoteGps = document.getElementById('remote-gps');
+
+        let peer = null;
+        let dataConn = null;
+        let map = null;
+        let marker = null;
+
+        // ========================================
+        // MAP INITIALIZATION
+        // ========================================
+        function initMap() {
+            map = L.map('map').setView([0, 0], 2);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors'
-                }).addTo(map);
-                }
-                initMap();
+            }).addTo(map);
+            log('MAP INITIALIZED');
+        }
 
-                function updateMap(lat, lon) {
-                if (!map) return;
-                const pos = [lat, lon];
-                if (!marker) {
+        function updateMap(lat, lon) {
+            if (!map) return;
+            const pos = [lat, lon];
+            if (!marker) {
                 marker = L.marker(pos).addTo(map);
                 map.setView(pos, 15);
-                } else {
+            } else {
                 marker.setLatLng(pos);
                 map.setView(pos);
-                }
-                }
+            }
+        }
 
-                function log(msg) {
-                const div = document.createElement('div');
-                div.innerText = `> ${msg}`;
-                logEl.appendChild(div);
-                logEl.parentElement.scrollTop = logEl.parentElement.scrollHeight;
-                }
+        // ========================================
+        // LOGGING SYSTEM
+        // ========================================
+        function log(msg) {
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.innerHTML = `<span class="text-gray-600">[${timestamp}]</span> <span class="text-green-400">&gt;</span> ${msg}`;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
 
-                function forcePlay() {
-                remoteVideo.play().then(() => {
-                playOverlay.classList.add('hidden');
-                log('PLAYBACK STARTED MANUALLY');
-                }).catch(e => {
-                log('MANUAL PLAY ERROR: ' + e.message);
-                });
-                }
+        // ========================================
+        // VIDEO CONTROLS
+        // ========================================
+        function forcePlay() {
+            remoteVideo.play()
+                .then(() => {
+                    playOverlay.classList.add('hidden');
+                    log('MANUAL PLAYBACK STARTED');
+                })
+                .catch(e => log('MANUAL PLAY ERROR: ' + e.message));
+        }
 
-                function setFilter(type) {
-                // Reset classes
-                remoteVideo.className = '';
+        function setFilter(type) {
+            remoteVideo.className = 'w-full h-full object-cover bg-black';
 
-                // Update Buttons
-                document.querySelectorAll('.btn-secondary').forEach(b => b.classList.remove('active'));
-                document.getElementById('btn-' + type).classList.add('active');
+            document.querySelectorAll('.btn-secondary').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-' + type).classList.add('active');
 
-                if (type === 'night') {
+            if (type === 'night') {
                 remoteVideo.classList.add('filter-night');
-                } else if (type === 'thermal') {
+            } else if (type === 'thermal') {
                 remoteVideo.classList.add('filter-thermal');
-                }
-                }
+            }
 
-                // Init PeerJS
-                const myId = "HQ-" + Math.floor(Math.random() * 100);
-                peer = new Peer(myId);
+            log('VISUAL MODE: ' + type.toUpperCase());
+        }
 
-                peer.on('open', (id) => {
-                log('NETWORK INITIALIZED');
-                myIdEl.innerText = "HQ ID: " + id;
-                });
+        // ========================================
+        // PEERJS INITIALIZATION
+        // ========================================
+        const myId = "HQ-" + Math.floor(Math.random() * 1000);
+        peer = new Peer(myId);
 
-                peer.on('error', (err) => {
-                console.error(err);
-                log('ERROR: ' + err.type);
-                });
+        peer.on('open', (id) => {
+            log('NETWORK INITIALIZED');
+            myIdEl.innerText = "HQ ID: " + id;
+        });
 
-                function connectToSoldier() {
-                const destId = remoteIdInput.value.toUpperCase();
-                if (!destId) {
-                log('INVALID UNIT ID');
+        peer.on('error', (err) => {
+            console.error(err);
+            log('PEER ERROR: ' + err.type);
+        });
+
+        // ========================================
+        // CONNECTION FUNCTIONS
+        // ========================================
+        function connectToSoldier() {
+            const destId = remoteIdInput.value.toUpperCase().trim();
+            if (!destId) {
+                log('ERROR: INVALID UNIT ID');
                 return;
-                }
-                log('INITIATING UPLINK TO ' + destId + '...');
+            }
 
-                // 1. Open Data Connection
-                const conn = peer.connect(destId);
-                conn.on('open', () => {
+            log('INITIATING UPLINK TO ' + destId + '...');
+
+            // 1. Open Data Connection
+            const conn = peer.connect(destId);
+
+            conn.on('open', () => {
                 log('DATA UPLINK ESTABLISHED');
                 dataStatus.innerText = "ONLINE";
                 dataStatus.classList.add('text-green-500');
                 dataConn = conn;
-                });
+            });
 
-                conn.on('data', (data) => {
+            conn.on('data', (data) => {
                 if (data.type === 'LOG') {
-                log(data.payload);
+                    log('[SOLDIER] ' + data.payload);
                 } else if (data.type === 'TELEMETRY') {
-                remoteBat.innerText = data.payload.bat + '%';
-                if (data.payload.lat !== 0) {
-                remoteGps.innerText = `${data.payload.lat}, ${data.payload.lon}`;
-                updateMap(data.payload.lat, data.payload.lon);
+                    remoteBat.innerText = data.payload.bat + '%';
+                    if (data.payload.lat !== 0) {
+                        remoteGps.innerText = `${data.payload.lat.toFixed(4)}, ${data.payload.lon.toFixed(4)}`;
+                        updateMap(data.payload.lat, data.payload.lon);
+                    }
                 }
-                }
-                });
+            });
 
-                conn.on('close', () => {
+            conn.on('close', () => {
                 log('DATA UPLINK LOST');
                 dataStatus.innerText = "OFFLINE";
                 dataStatus.classList.remove('text-green-500');
-                });
+            });
 
-                // 2. Call for Video (Send Dummy Silent Stream)
-                const canvas = document.createElement('canvas');
-                canvas.width = 640;
-                canvas.height = 480;
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = 'black';
-                ctx.fillRect(0, 0, 640, 480);
-                const stream = canvas.captureStream(10);
+            // 2. Initiate Video Call
+            setTimeout(() => initiateVideoCall(destId), 500);
+        }
 
-                // Add a silent audio track
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const dst = audioCtx.createMediaStreamDestination();
-                const audioTrack = dst.stream.getAudioTracks()[0];
-                stream.addTrack(audioTrack);
+        function initiateVideoCall(destId) {
+            // Create dummy stream (canvas + silent audio)
+            const canvas = document.createElement('canvas');
+            canvas.width = 640;
+            canvas.height = 480;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, 640, 480);
+            const videoStream = canvas.captureStream(10);
 
-                log('SENDING SIGNAL...');
-                const call = peer.call(destId, stream);
-                setupCallEvents(call);
-                }
+            // Add silent audio track
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const dest = audioCtx.createMediaStreamDestination();
+            const audioTrack = dest.stream.getAudioTracks()[0];
+            videoStream.addTrack(audioTrack);
 
-                function setupCallEvents(call) {
-                call.on('stream', (remoteStream) => {
-                log('VIDEO STREAM EVENT FIRED');
+            log('SENDING VIDEO CALL REQUEST...');
+            const call = peer.call(destId, videoStream);
+            setupCallEvents(call);
+        }
+
+        function setupCallEvents(call) {
+            call.on('stream', (remoteStream) => {
+                log('VIDEO STREAM RECEIVED');
                 feedStatus.innerText = "ONLINE";
                 feedStatus.classList.add('text-green-500');
+
                 remoteVideo.srcObject = remoteStream;
 
-                remoteVideo.play().catch(e => {
-                log('AUTOPLAY BLOCKED: ' + e.message);
-                playOverlay.classList.remove('hidden');
-                });
-                });
+                remoteVideo.play()
+                    .catch(e => {
+                        log('AUTOPLAY BLOCKED - MANUAL INTERACTION REQUIRED');
+                        playOverlay.classList.remove('hidden');
+                    });
+            });
 
-                call.on('close', () => {
-                log('UPLINK TERMINATED');
+            call.on('close', () => {
+                log('VIDEO UPLINK TERMINATED');
                 feedStatus.innerText = "OFFLINE";
                 feedStatus.classList.remove('text-green-500');
                 remoteVideo.srcObject = null;
-                });
-                }
+            });
+        }
 
-                peer.on('call', (call) => {
-                log('INCOMING CALL FROM UNIT');
-                const canvas = document.createElement('canvas');
-                canvas.width = 640;
-                canvas.height = 480;
-                const stream = canvas.captureStream(10);
-                call.answer(stream);
-                setupCallEvents(call);
-                });
-                </script>
+        // Handle incoming calls
+        peer.on('call', (call) => {
+            log('INCOMING CALL FROM SOLDIER UNIT');
+            const canvas = document.createElement('canvas');
+            canvas.width = 640;
+            canvas.height = 480;
+            const stream = canvas.captureStream(10);
+            call.answer(stream);
+            setupCallEvents(call);
+        });
+
+        // ========================================
+        // INITIALIZATION
+        // ========================================
+        window.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            log('COMMAND CENTER ONLINE');
+        });
+    </script>
 </body>
 
 </html>
